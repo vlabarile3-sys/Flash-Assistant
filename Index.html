@@ -1,0 +1,570 @@
+<!-- File: Index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flash Assistant (O18)</title>
+<?!= include('CSS'); ?>
+
+</head>
+<body>
+<!-- Background Animated Orbs -->
+<div class="background-orbs">
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+</div>
+
+<div class="container">
+<!-- Application Header -->
+<header class="app-header">
+<h1>
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap" style="color:var(--warning); filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.4));">
+<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+</svg>
+Flash Assistant (O18)
+</h1>
+<div style="display:flex; align-items:center; gap: 16px;">
+<!-- Unified Queue Badge -->
+<div class="glass-badge" style="padding: 6px 14px;">
+<span style="font-size:11px; opacity:0.6; margin-right:4px;">QUEUE</span>
+<span style="font-size:13px; font-weight:600; color:var(--text-main); letter-spacing: 1px;">GLOBAL UNIFIED</span>
+</div>
+
+<!-- Offline Sync Indicator -->
+<div id="offline-badge" class="glass-badge" style="display:none; border-color: rgba(239, 68, 68, 0.4); color: var(--error); background: rgba(239, 68, 68, 0.05);">
+<span style="animation: pulse-error 2s infinite;">📡</span> Offline Sync: <span id="offline-count" style="font-weight:bold; margin-left:4px;">0</span>
+</div>
+
+<!-- Live Sync Status -->
+<div class="glass-badge">
+<span class="status-dot"></span> Live Sync (4s)
+</div>
+
+<!-- QA Dashboard Trigger (QA Only) -->
+<button id="qa-dashboard-btn" class="icon-btn" style="display:none; width: 34px; height: 34px; color: var(--success);" title="QA Performance Dashboard">
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+</button>
+
+<!-- Gray Area Database Trigger (QA Only) -->
+<button id="gray-area-db-btn" class="icon-btn" style="display:none; width: 34px; height: 34px; color: var(--warning);" title="Gray Area Database">
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+</svg>
+</button>
+
+<!-- Theme Toggle Switch -->
+<button id="theme-toggle-btn" class="icon-btn" title="Toggle Theme" style="width: 34px; height: 34px;">
+<svg id="theme-icon-sun" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+<svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+</button>
+
+<!-- Help Guide Trigger -->
+<button id="help-guide-btn" class="icon-btn" title="User Guide & Documentation" style="width: 34px; height: 34px;">
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="12" cy="12" r="10"></circle>
+<path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+<line x1="12" y1="17" x2="12.01" y2="17"></line>
+</svg>
+</button>
+
+<!-- QA Settings Trigger (QA Only) -->
+<button id="qa-settings-btn" class="icon-btn" style="display:none; width: 34px; height: 34px;" title="QA Configuration">
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+</button>
+</div>
+</header>
+<!-- ESCALATION ENTRY FORM (WIZARD UX) -->
+<div class="glass-panel animate-entry" style="position: relative; z-index: 50; padding-bottom: 20px;">
+<form id="entry-form" onsubmit="event.preventDefault();">
+<!-- PROGRESS BAR -->
+<div class="wizard-progress">
+<div class="step-indicator active" id="indicator-1">1. Job ID</div>
+<div class="step-indicator" id="indicator-2">2. Context</div>
+<div class="step-indicator" id="indicator-3">3. Verdict</div>
+</div>
+
+<!-- STEP 1: IDENTIFICATION (Mandatory) -->
+<div class="wizard-step active" id="step-1">
+<h3 style="color:var(--text-main); margin-bottom:5px; font-size:16px;">Task Identification</h3>
+<p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">Provide the target workflow and the unique Job ID.</p>
+<div class="form-grid">
+<div class="form-group">
+<label for="workflow-select">Active Workflow</label>
+<input type="text" id="workflow-select" value="O18" class="modern-input" readonly required style="cursor: not-allowed; opacity: 0.8; color: var(--warning); font-weight: bold;">
+</div>
+<div class="form-group">
+<label>Job ID Number <span style="color:var(--error);">*</span></label>
+<input type="text" id="job-id-input" class="modern-input" required placeholder="e.g. 123456789" autocomplete="off" oninput="app.validateStep1()">
+</div>
+</div>
+
+<div class="wizard-footer" style="justify-content: flex-end;">
+<button type="button" class="btn-primary" id="btn-next-1" disabled onclick="app.goToStep(2)">Next Step ➔</button>
+</div>
+</div>
+
+<!-- STEP 2: CONTEXT ENRICHMENT (Optional) -->
+<div class="wizard-step" id="step-2">
+<h3 style="color:var(--text-main); margin-bottom:5px; font-size:16px;">Payload Enrichment (Optional)</h3>
+<p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">Paste text or drop screenshots to help QA understand the context.</p>
+<div class="form-group" style="margin-bottom: 20px;">
+<label style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+<span>User Query (Prompt)</span>
+<span style="font-size:10px; background:var(--bg-hover); padding:2px 6px; border-radius:4px; border:1px solid var(--border-light);">Text or Image</span>
+</label>
+<textarea id="query-input" class="modern-input" placeholder="Paste user prompt or screenshot here..." style="resize:vertical; min-height:80px;" autocomplete="off" rows="3" oninput="app.validateStep2()"></textarea>
+</div>
+
+<div class="form-group" style="margin-bottom: 10px;">
+<label style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+<span>Model Response</span>
+<span style="font-size:10px; background:var(--bg-hover); padding:2px 6px; border-radius:4px; border:1px solid var(--border-light);">Text or Image</span>
+</label>
+<textarea id="response-input" class="modern-input" placeholder="Paste model response or screenshot here..." style="resize:vertical; min-height:80px;" autocomplete="off" rows="3" oninput="app.validateStep2()"></textarea>
+</div>
+
+<div class="wizard-footer">
+<button type="button" class="btn-secondary" onclick="app.goToStep(1)">Back</button>
+<button type="button" id="btn-step2-next" class="btn-primary" style="background:var(--bg-hover); border:1px solid var(--primary); color:var(--primary);" onclick="app.goToStep(3)">Skip ➔</button>
+</div>
+</div>
+
+<!-- STEP 3: EVALUATION (Mandatory) -->
+<div class="wizard-step" id="step-3">
+<h3 style="color:var(--text-main); margin-bottom:5px; font-size:16px;">Final Verdict</h3>
+<p style="color:var(--text-muted); font-size:13px; margin-bottom:20px;">Declare your policy hypothesis and provide a detailed rationale.</p>
+<div class="form-grid">
+<div class="form-group">
+<label>Your Policy Hypothesis <span style="color:var(--error);">*</span></label>
+<div id="agent-policy-checkboxes" onmouseup="setTimeout(()=>app.validateStep3(), 100)"></div>
+</div>
+<div class="form-group">
+<label for="agent-comment-input">Your Rationale <span style="color:var(--error);">*</span></label>
+<textarea id="agent-comment-input" class="modern-input" rows="4" placeholder="Why do you think it's a violation or safe?" oninput="app.validateStep3()"></textarea>
+<div id="agent-comment-warning" style="display:none; color:var(--error); font-size:12px; margin-top:4px; padding:8px; background:rgba(239, 68, 68, 0.05); border-left:3px solid var(--error); border-radius:4px; line-height:1.4;">
+⚠️ Min. 15 characters required.
+</div>
+</div>
+</div>
+
+<div class="wizard-footer">
+<button type="button" class="btn-secondary" onclick="app.goToStep(2)">Back</button>
+<button type="submit" id="btn-submit-final" class="btn-primary" disabled style="background:var(--warning); color:#000; transition: all 0.3s ease;">Escalate to QA</button>
+</div>
+</div>
+
+</form>
+</div>
+
+<!-- Live Queue Table -->
+<div class="glass-panel animate-entry" style="animation-delay: 0.1s; position: relative; z-index: 1;">
+<div class="table-header" style="flex-wrap: wrap; gap: 1rem;">
+<div style="display:flex; flex-direction:column;">
+<h2 style="margin-bottom:4px; color:var(--text-main);">Unified Queue</h2>
+<span id="user-role-badge" style="font-size:11px; font-family:var(--font-mono); color:var(--text-muted); letter-spacing:1px;">AUTHENTICATING...</span>
+</div>
+<!-- Table Search Bar -->
+<div style="display:flex; align-items:center; gap:12px; flex-grow: 1; max-width: 320px;">
+<div class="search-container" style="flex-grow: 1; position:relative;">
+<input type="text" id="table-search-input" placeholder="Search Job ID..."
+style="padding-left: 38px; height: 40px; font-size: 14px; border:none; background:transparent; width:100%; outline:none; color:var(--text-main);">
+<svg style="position:absolute; left:12px; top:12px; width:18px; height:18px; color:var(--text-muted);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+</div>
+<div id="search-spinner" class="mini-spinner" style="display:none; flex-shrink:0;"></div>
+</div>
+</div>
+<!-- Table Structure -->
+<div class="table-wrapper">
+<table id="log-table">
+<thead>
+<tr>
+<th style="width: 80px;">Time</th>
+<th style="width: 140px;">Task QA Verdict</th>
+<th style="width: 90px;">Workflow</th>
+<th style="width: 220px;">Job ID / Reference</th>
+<th>Agent Thread</th>
+<th>QA Policy</th>
+<th>QA Note</th>
+<th id="th-aht-timer" style="text-align:center; width: 80px; display:none;">AHT Limit</th>
+<th style="text-align:center; width: 140px;">Action</th>
+</tr>
+</thead>
+<tbody id="log-table-body"></tbody>
+</table>
+<!-- Empty State Graphic -->
+<div id="empty-state" style="display:none; padding: 3rem; text-align:center; color: var(--text-muted);">
+<div style="font-size: 2rem; margin-bottom: 10px;">📭</div>
+<h3 style="margin:0; color:var(--text-main);">Queue is Empty</h3>
+<p style="font-size: 14px; max-width: 300px; margin: 10px auto;">
+No pending doubts or recently resolved tasks found.
+</p>
+</div>
+</div>
+
+<!-- Pagination Controls -->
+<div class="pagination-footer" style="display:flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; border-top: 1px solid var(--glass-border); padding-top: 1rem;">
+<span id="pagination-info" style="font-size: 13px; color: var(--text-muted);">Page 1</span>
+<div style="display:flex; gap: 8px;">
+<button id="btn-prev-page" class="btn-secondary" style="padding: 6px 14px; font-size: 13px;" disabled>Previous</button>
+<button id="btn-next-page" class="btn-secondary" style="padding: 6px 14px; font-size: 13px;" disabled>Next</button>
+</div>
+</div>
+
+</div>
+</div>
+
+<!-- FULL REFERENCE MODAL (Decoupled Payload Overlay) -->
+<div id="reference-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 800px; border-top: 4px solid var(--text-main);">
+<h3 class="modal-title" style="margin-bottom: 5px;">Reference Details</h3>
+<p style="color:var(--text-muted); font-size:13px; margin-bottom:1.5rem;">Decoupled payload view.</p>
+
+<div style="display:flex; flex-direction:column; gap:16px;">
+<!-- Base ID Layer -->
+<div style="background:var(--bg-hover); padding:16px; border-radius:8px; border:1px solid var(--border-light);">
+<span style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:bold; display:block; margin-bottom:8px;">Job ID Number</span>
+<div id="modal-ref-jobid" style="font-family:var(--font-mono); font-size:15px; color:var(--warning); word-break: break-all;"></div>
+</div>
+
+<!-- Query Layer -->
+<div style="background:var(--bg-hover); padding:16px; border-radius:8px; border:1px solid var(--border-light);">
+<span style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:bold; display:block; margin-bottom:8px;">User Query (Prompt)</span>
+<div id="modal-ref-query" style="font-family:var(--font-mono); font-size:14px; color:var(--text-main); white-space: pre-wrap; word-break: break-word;"></div>
+</div>
+
+<!-- Response Layer -->
+<div style="background:var(--bg-hover); padding:16px; border-radius:8px; border:1px solid var(--border-light);">
+<span style="font-size:11px; color:var(--text-muted); text-transform:uppercase; font-weight:bold; display:block; margin-bottom:8px;">Model Response</span>
+<div id="modal-ref-response" style="font-family:var(--font-mono); font-size:14px; color:var(--text-main); white-space: pre-wrap; word-break: break-word;"></div>
+</div>
+</div>
+
+<div class="modal-actions" style="display:flex; justify-content:flex-end; margin-top: 1.5rem;">
+<button id="reference-close-btn" class="btn-secondary">Close</button>
+</div>
+</div>
+</div>
+
+<!-- EVALUATION / QA RESOLUTION MODAL -->
+<div id="evaluation-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 750px; border-top: 4px solid var(--warning);">
+<h3 class="modal-title" style="color:var(--text-main); margin-bottom:5px;" id="eval-modal-title">Add Blind Analysis</h3>
+<p style="color:var(--text-muted); font-size:14px; margin-bottom:1.5rem; display:flex; align-items:center; gap:8px;">
+Job ID: <span id="eval-job-id" class="font-mono" style="color:var(--warning); font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px; display:inline-block; vertical-align:middle;"></span>
+</p>
+<p id="eval-modal-desc" style="font-size:12px; color:var(--text-muted); margin-bottom:1rem; border-left:2px solid var(--border-solid); padding-left:8px;">
+Your analysis is hidden from other agents until the QA resolves the case.
+</p>
+<div class="form-group">
+<label>Your Policy Verdict</label>
+<div id="eval-policy-checkboxes"></div>
+</div>
+<div class="form-group" style="margin-top: 1.5rem;">
+<label>Your Rationale</label>
+<textarea id="eval-comment-input" class="modern-input" rows="4" placeholder="Explain your decision..."></textarea>
+<div id="eval-comment-warning" style="display:none; color:var(--error); font-size:12px; margin-top:4px; padding:8px; background:rgba(239, 68, 68, 0.05); border-left:3px solid var(--error); border-radius:4px; line-height:1.4;">
+⚠️ <b>Context Required:</b> Please provide a detailed rationale (min. 15 characters).
+</div>
+</div>
+
+<!-- QA Only: Gray Area Save Toggle -->
+<div id="qa-gray-area-container" style="display:none; margin-top:1.5rem; padding: 12px; background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px;">
+<div style="display:flex; align-items:center; justify-content:space-between;">
+<div>
+<span style="display:block; font-weight:bold; color:var(--warning); font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Mark as Gray Area</span>
+<span style="font-size:12px; color:var(--text-muted);">Save this edge case to the permanent QA database.</span>
+</div>
+<label class="switch">
+<input type="checkbox" id="eval-gray-area-toggle">
+<span class="slider round"></span>
+</label>
+</div>
+</div>
+<!-- Evaluation Actions -->
+<div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:2rem;">
+<button id="eval-close-btn" class="btn-secondary">Cancel</button>
+<button id="eval-park-btn" class="btn-park" style="display:none;">Ask & Park</button>
+<button id="eval-submit-btn" class="btn-primary" style="background:var(--warning); color:#000; min-width:auto;">Submit</button>
+</div>
+</div>
+</div>
+
+<!-- BLIND THREAD CONTENT MODAL -->
+<div id="content-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 850px;">
+<h3 id="modal-title" class="modal-title">Thread History</h3>
+<p style="color:var(--text-muted); font-size:14px; margin-bottom:1.5rem;">Blind analyses and Official Verdict.</p>
+<div id="modal-body-view" style="background:transparent; padding:0; margin-bottom:1rem; max-height: 65vh; overflow-y:auto;"></div>
+<div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top: 1.5rem;">
+<button id="modal-close-btn" class="btn-secondary">Close</button>
+</div>
+</div>
+</div>
+
+<!-- QA NOTE DISPLAY & EDIT MODAL -->
+<div id="qa-note-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 750px; border-top: 4px solid var(--primary);">
+<h3 class="modal-title" style="color:var(--primary); margin-bottom: 5px;">QA Official Verdict</h3>
+<p style="color:var(--text-muted); font-size:13px; margin-bottom:1.5rem; display:flex; align-items:center; gap:8px;">
+Job ID: <span id="qa-note-job-id" class="font-mono" style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:400px; display:inline-block; vertical-align:middle;"></span>
+</p>
+
+<!-- View Section -->
+<div id="qa-note-view-section">
+<div style="margin-bottom: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center;">
+<div>
+<div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Resolved By</div>
+<div id="qa-note-author" style="font-size:15px; font-weight:bold; color:var(--text-main);"></div>
+</div>
+<div id="qa-note-gray-badge" style="display:none; padding:4px 8px; background:rgba(251,191,36,0.1); border:1px solid var(--warning); color:var(--warning); font-size:11px; font-weight:bold; border-radius:12px; text-transform:uppercase;">
+Gray Area Case
+</div>
+</div>
+<div style="margin-bottom: 1rem;">
+<div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Correct Policy</div>
+<div id="qa-note-policy" style="font-size:16px; font-weight:bold;"></div>
+</div>
+<div style="margin-bottom: 2rem;">
+<div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:4px;">Rationale (QA Note)</div>
+<div id="qa-note-text" style="font-size:15px; color:var(--text-main); line-height:1.6; background:var(--bg-hover); padding:16px; border-radius:8px;"></div>
+</div>
+<div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end;">
+<button id="qa-note-close-btn" class="btn-secondary">Close</button>
+<button id="qa-note-modify-btn" class="btn-primary" style="display:none; min-width:auto; background:var(--warning); color:#000;">Modify Decision</button>
+</div>
+</div>
+
+<!-- Edit Section (QA Only) -->
+<div id="qa-note-edit-section" style="display: none;">
+<div class="form-group">
+<label>Correct Policy</label>
+<div id="qa-note-edit-policy"></div>
+</div>
+<div class="form-group" style="margin-top: 1.5rem;">
+<label>Revised Note</label>
+<textarea id="qa-note-edit-text" class="modern-input" rows="6" placeholder="Update your rationale..."></textarea>
+</div>
+<div style="margin-top:1.5rem; padding: 12px; background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px;">
+<div style="display:flex; align-items:center; justify-content:space-between;">
+<div>
+<span style="display:block; font-weight:bold; color:var(--warning); font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Mark as Gray Area</span>
+<span style="font-size:12px; color:var(--text-muted);">Save this edge case to the permanent QA database.</span>
+</div>
+<label class="switch">
+<input type="checkbox" id="edit-gray-area-toggle">
+<span class="slider round"></span>
+</label>
+</div>
+</div>
+
+<div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top: 2rem;">
+<button id="qa-note-edit-cancel-btn" class="btn-secondary">Cancel</button>
+<button id="qa-note-save-btn" class="btn-primary" style="min-width:auto; background:var(--warning); color:#000;">Save Changes</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- GRAY AREA DATABASE MODAL -->
+<div id="gray-area-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 1100px; max-height: 90vh; display: flex; flex-direction: column;">
+<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 20px;">
+<div>
+<h3 class="modal-title" style="color:var(--warning); display:flex; align-items:center; gap:8px;">
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+Gray Area Cases
+</h3>
+<p style="color:var(--text-muted); font-size:14px; margin-top:5px;">Permanent repository of complex edge cases and custom policies.</p>
+</div>
+<!-- Policy Filter Dropdown -->
+<div class="form-group" style="min-width: 250px;">
+<select id="gray-area-policy-filter" style="width: 100%; padding: 10px; background: var(--input-bg); border: 1px solid var(--border-solid); border-radius: 8px; color: var(--text-main); font-size: 14px; outline: none; cursor:pointer;">
+<option value="ALL">Filter by Policy (All)</option>
+</select>
+</div>
+</div>
+
+<div class="table-wrapper" style="flex:1; overflow-y:auto; border: 1px solid var(--border-light); background:var(--bg-panel); border-radius:12px;">
+<table style="width:100%; border-collapse:collapse; text-align:left;">
+<thead>
+<tr>
+<th style="width:100px;">Date</th>
+<th style="width:250px;">Job ID / Reference</th>
+<th style="width:150px;">Correct Policy</th>
+<th>QA Rationale</th>
+</tr>
+</thead>
+<tbody id="gray-area-table-body"></tbody>
+</table>
+<div id="gray-area-empty-state" style="display:none; padding: 3rem; text-align:center; color: var(--text-muted);">
+<div style="font-size: 2rem; margin-bottom: 10px;">📭</div>
+<h3 style="margin:0; color:var(--text-main);">No Gray Areas Found</h3>
+</div>
+</div>
+
+<div class="modal-actions" style="display:flex; justify-content:flex-end; margin-top:20px; padding-top: 15px; border-top: 1px solid var(--border-light);">
+<button id="gray-area-close-btn" class="btn-secondary">Close Database</button>
+</div>
+</div>
+</div>
+
+<!-- QA SETTINGS CONTROL PANEL MODAL -->
+<div id="settings-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 850px; max-height: 90vh; overflow-y: auto; padding: 25px;">
+<h3 class="modal-title" style="margin-bottom: 20px;">QA Settings Control Panel</h3>
+<div class="settings-tabs" id="settings-tab-group">
+<button type="button" class="tab-folder active" onclick="switchSettingsFolder('folder-qa-list')">👥 QA Whitelist</button>
+<button type="button" class="tab-folder" onclick="switchSettingsFolder('folder-policies')">📋 Subworkflow Policies</button>
+<button type="button" class="tab-folder" onclick="switchSettingsFolder('folder-aht')">📗 AHT Config</button>
+<button type="button" class="tab-folder" onclick="switchSettingsFolder('folder-jixy')">🤖 Jixy Brain Engine</button>
+</div>
+<!-- QA Whitelist Panel -->
+<div id="folder-qa-list" class="settings-tab-content active">
+<p style="color:var(--text-muted); font-size:14px; margin-bottom:1rem;">Enter authorized QA email addresses or LDAP strings (one per line).</p>
+<textarea id="settings-emails" class="modern-input" rows="8"></textarea>
+</div>
+
+<!-- 3-Tier Policy Builder Panel -->
+<div id="folder-policies" class="settings-tab-content">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+<h4 style="color:var(--primary); font-size:12px; text-transform:uppercase; margin:0; letter-spacing: 0.5px;">Active Subworkflows & Policies</h4>
+<button type="button" id="settings-policy-add-row" class="btn-primary" style="padding:6px 16px; font-size:13px; min-width:auto; height:auto; text-transform:none; border-radius:6px; background:var(--success); color:#fff;">+ Add Category</button>
+</div>
+<p style="color:var(--text-muted); font-size:13px; margin-top:-5px; margin-bottom:15px;">Define Subworkflow Categories, assign Media Types, and insert specific Policies. Type a policy and press <kbd style="background:var(--bg-hover); border:1px solid var(--border-solid); padding:2px 4px; border-radius:4px; font-size:11px;">Enter</kbd> to add it.</p>
+<div id="settings-policies-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 5px; border: 1px solid var(--border-light); padding: 10px; border-radius: 8px; background: var(--bg-panel);"></div>
+</div>
+
+<!-- Timer Config Panel -->
+<div id="folder-aht" class="settings-tab-content">
+<div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+<div class="form-group" style="margin-bottom:0;">
+<label>Countdown Duration (Minutes)</label>
+<input type="number" id="settings-cd-duration" class="modern-input" min="1" max="120" value="3">
+</div>
+<div class="form-group" style="margin-bottom:0; display:flex; align-items:flex-end;">
+<label style="display:flex; align-items:center; gap:10px; cursor:pointer; padding-bottom:12px;">
+<input type="checkbox" id="settings-cd-visibility" style="width:auto; transform:scale(1.2);">
+<span style="color:var(--text-main); font-weight:600; font-size:14px;">Show Countdown to Agents</span>
+</label>
+</div>
+</div>
+</div>
+
+<!-- Jixy Knowledge Base Panel -->
+<div id="folder-jixy" class="settings-tab-content">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+<h4 style="color:var(--primary); font-size:12px; text-transform:uppercase; margin:0; letter-spacing: 0.5px;">Jixy Knowledge Engine (KB)</h4>
+<button type="button" id="settings-jixy-add-row" class="btn-primary" style="padding:6px 16px; font-size:13px; min-width:auto; height:auto; text-transform:none; border-radius:6px; background:var(--success); color:#fff;">+ Add Resource</button>
+</div>
+<p style="color:var(--text-muted); font-size:13px; margin-top:-5px; margin-bottom:15px;">Provide Title, URL, and Keywords. Type a keyword and press <kbd style="background:var(--bg-hover); border:1px solid var(--border-solid); padding:2px 4px; border-radius:4px; font-size:11px;">Enter</kbd> to add it as a tag.</p>
+<div id="settings-jixy-kb-container" style="display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 5px; border: 1px solid var(--border-light); padding: 10px; border-radius: 8px; background: var(--bg-panel);"></div>
+</div>
+
+<div class="modal-actions" style="display:flex; gap:10px; justify-content:flex-end; margin-top:2rem; border-top: 1px solid var(--border-light); padding-top: 15px;">
+<button id="settings-close-btn" class="btn-secondary">Cancel</button>
+<button id="settings-save-btn" class="btn-primary" style="min-width:auto; background:var(--warning); color:#000;">Save All</button>
+</div>
+</div>
+</div>
+
+<!-- HELP GUIDE MODAL (Documentation from V1 ported to V2) -->
+<div id="help-modal" class="modal-backdrop" style="display: none;">
+<div class="modal-content" style="max-width: 850px; max-height: 90vh; overflow-y: auto; padding: 25px; border-top: 4px solid var(--text-main);">
+<h3 class="modal-title" style="margin-bottom: 20px;">📘 Platform User Guide</h3>
+<div class="settings-tabs">
+<button type="button" class="tab-folder active" onclick="switchHelpFolder('help-agent-basics')">🚀 Escalate Ticket</button>
+<button type="button" class="tab-folder" onclick="switchHelpFolder('help-agent-queue')">📊 Queue & Triage</button>
+<button type="button" class="tab-folder" onclick="switchHelpFolder('help-jixy')">🤖 Jixy AI Tool</button>
+<button type="button" id="tab-help-qa" class="tab-folder" onclick="switchHelpFolder('help-qa-ops')" style="display:none; color:var(--primary);">👑 QA Operations</button>
+</div>
+
+<div id="help-agent-basics" class="settings-tab-content active">
+<h4 style="color:var(--primary); margin-bottom:10px; margin-top:10px;">1. What is Flash Assistant (O18)?</h4>
+<p style="color:var(--text-muted); font-size:15px; margin-bottom:20px; line-height:1.6;">
+This platform replaces spreadsheets and chats for complex doubts and policies. It ensures a transparent, real-time workflow between Agents and the QA team.
+</p>
+<h4 style="color:var(--primary); margin-bottom:10px;">2. How to submit a ticket</h4>
+<ul style="color:var(--text-muted); font-size:15px; line-height:1.8; padding-left:20px;">
+<li style="margin-bottom:8px;">Enter the exact <b>Job ID Number</b> in the first step.</li>
+<li style="margin-bottom:8px;">(Optional) In the second step, paste text or screenshots of the <b>User Query</b> and <b>Model Response</b>.</li>
+<li style="margin-bottom:8px;">Open the dropdown and select <b>Your Policy Hypothesis</b>.</li>
+<li style="margin-bottom:8px;">Write a clear <b>Rationale</b> explaining the context of your decision.</li>
+<li style="margin-bottom:8px;">Click the <button class="btn-primary" style="background:var(--warning); color:#000; padding:4px 10px; font-size:11px; display:inline-block; pointer-events:none; vertical-align:middle; border-radius:6px; min-width:auto;">ESCALATE TO QA</button> button.</li>
+</ul>
+</div>
+
+<div id="help-agent-queue" class="settings-tab-content">
+<h4 style="color:var(--primary); margin-bottom:10px; margin-top:10px;">Understanding the Live Queue</h4>
+<p style="color:var(--text-muted); font-size:15px; margin-bottom:15px; line-height:1.6;">
+The Doubts Queue is a "Live-Sync" table. It automatically updates every 4 seconds.
+</p>
+<h4 style="color:var(--primary); margin-bottom:10px; font-size:14px;">Color Codes (Pulsing Dots)</h4>
+<ul style="color:var(--text-muted); font-size:15px; line-height:1.8; padding-left:20px; list-style-type:none;">
+<li style="margin-bottom:8px;"><div class="pulse-dot" style="background:var(--warning); width:10px; height:10px; display:inline-block; border-radius:50%; box-shadow:0 0 5px var(--warning); margin-right:8px;"></div> <b style="color:var(--warning)">Yellow:</b> Pending QA review.</li>
+<li style="margin-bottom:8px;"><div class="pulse-dot" style="background:#a855f7; width:10px; height:10px; display:inline-block; border-radius:50%; box-shadow:0 0 5px #a855f7; margin-right:8px;"></div> <b style="color:#a855f7">Purple:</b> Parked for further investigation.</li>
+<li style="margin-bottom:8px;"><div class="pulse-dot" style="background:var(--success); width:10px; height:10px; display:inline-block; border-radius:50%; box-shadow:0 0 5px var(--success); margin-right:8px;"></div> <b style="color:var(--success)">Green:</b> Safe / No Violation.</li>
+<li style="margin-bottom:8px;"><div class="pulse-dot" style="background:var(--error); width:10px; height:10px; display:inline-block; border-radius:50%; box-shadow:0 0 5px var(--error); margin-right:8px;"></div> <b style="color:var(--error)">Red:</b> Violation.</li>
+</ul>
+</div>
+
+<div id="help-jixy" class="settings-tab-content">
+<h4 style="color:var(--primary); margin-bottom:10px; margin-top:10px;">Meet Jixy, your Knowledge Bot</h4>
+<p style="color:var(--text-muted); font-size:15px; margin-bottom:15px; line-height:1.6;">
+Jixy is a built-in Natural Language Processing (NLP) assistant programmed to help you retrieve official documents instantly.
+</p>
+<ul style="color:var(--text-muted); font-size:15px; line-height:1.8; padding-left:20px;">
+<li style="margin-bottom:8px;">Click the floating <b>Golden Robot</b> icon in the bottom right.</li>
+<li style="margin-bottom:8px;">Type a simple keyword in the chat.</li>
+<li style="margin-bottom:8px;">You can also submit bug reports or feedback to the developer by writing "Feedback" to Jixy.</li>
+</ul>
+</div>
+
+<div id="help-qa-ops" class="settings-tab-content">
+<div style="background: rgba(212, 175, 55, 0.05); border:1px solid var(--primary); padding:15px; border-radius:8px; margin-bottom:20px;">
+<h4 style="color:var(--primary); margin-top:0; margin-bottom:8px;">QA Exclusive Access</h4>
+<p style="color:var(--text-muted); font-size:14px; margin:0;">This section is visible only to users registered in the QA Whitelist.</p>
+</div>
+<h4 style="color:var(--primary); margin-bottom:10px;">Gray Area Database</h4>
+<p style="color:var(--text-muted); font-size:15px; margin-bottom:10px; line-height:1.6;">
+While resolving a complex ticket, toggle <b>"Mark as Gray Area"</b>. This will copy the ticket to a dedicated permanent database for edge cases, saving it from the automated monthly deletion.
+</p>
+</div>
+
+<div class="modal-actions" style="display:flex; justify-content:flex-end; margin-top:2rem; border-top: 1px solid var(--border-light); padding-top: 15px;">
+<button id="help-close-btn" class="btn-secondary">Close Guide</button>
+</div>
+</div>
+</div>
+
+<!-- JIXY WIDGET CONTAINER -->
+<div id="jixy-widget" class="jixy-widget-container">
+<!-- Floating Chat Panel -->
+<div id="ai-chat-window" class="ai-hidden glass-panel jixy-chat-panel">
+<h3 class="jixy-header">
+<span class="ai-face-mini"><span class="ai-pupil pupil-left"></span><span class="ai-pupil pupil-right"></span></span>
+Jixy Knowledge Bot
+</h3>
+<div id="ai-messages" class="jixy-messages"></div>
+<div id="ai-quick-chips" class="jixy-chips" style="display: none;"></div>
+<div class="jixy-input-area">
+<input type="text" id="ai-input" placeholder="Ask Jixy for policies or files..." onkeypress="handleAiEnter(event)">
+<button class="btn-primary jixy-send-btn" onclick="sendAiMessage()">Send</button>
+</div>
+</div>
+<!-- Tooltip Hint -->
+<div id="jixy-hint" class="jixy-floating-hint">
+<span>Ask Jixy</span>
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+</div>
+<!-- Trigger Button -->
+<button id="ai-toggle-btn" onclick="toggleAI()" title="Ask Jixy AI">
+<div class="ai-face"><div class="ai-eye"><div class="ai-pupil"></div></div><div class="ai-eye"><div class="ai-pupil"></div></div></div>
+</button>
+</div>
+
+<?!= include('JixyFAQ'); ?>
+<?!= include('JavaScript'); ?>
+</body>
+</html>

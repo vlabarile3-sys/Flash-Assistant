@@ -1,0 +1,2153 @@
+<!-- File: JavaScript.html -->
+<script>
+  /**
+   * APP MANAGER v9.2.1 - FLASH ASSISTANT
+   * Patch: Strict String Concatenation, Jixy Lens, Data Hash, EN Localization, Native AudioContext Synthesizer
+   */
+  class AppManager {
+    constructor() {
+      this.CONFIG = {
+        POLL_INTERVAL_MS: 4000, 
+        PAGE_SIZE: 10
+      };
+
+      this.state = {
+        user: { ldap: 'Guest', isQa: false, countdownDuration: 3, countdownVisibility: true, policies: [], jixyKB: [], chatSpaceUrl: '' },
+        page: 1, totalPages: 1, searchQuery: "",
+        lastRenderedSearch: "",
+        lastDataHash: null,
+        lastPoliciesHash: null,
+        highlightTargetJobId: null, 
+        isFetching: false, pollIntervalId: null,
+        pendingEval: null,
+        editingRowNum: null,
+        theme: 'dark',
+        activeTimers: new Map(),
+        jixyGreeted: false,
+        isSyncingOffline: false,
+        lastQaAlertTime: null,
+        lastAgentAlertTime: null,
+        grayAreaData: [],
+        grayAreaPolicies: [],
+        currentWizardStep: 1,
+        isDropdownOpen: false,        
+        pendingPolicyUpdate: false,
+        jobIdCheckTimeout: null,
+        jixyFeedbackImage: null 
+      };
+
+      this.dom = {};
+
+      this.utils = {
+          pad: (n) => n < 10 ? '0' + n : n,
+          toggleModal: (id, show) => {
+              const m = document.getElementById(id);
+              if(m) m.style.display = show ? 'flex' : 'none';
+          },
+          truncate: (s, l = 15) => (!s) ? '' : (s.length > l ? s.substring(0, l) + '...' : s),
+          escapeHtml: (t) => (!t) ? '' : String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"),
+          formatRichText: (t) => {
+              if (!t) return '';
+              let escaped = this.utils.escapeHtml(t);
+              const urlRegex = /(https?:\/\/[^\s]+)/g;
+              escaped = escaped.replace(urlRegex, function(url) {
+                  return '<a href="' + url + '" target="_blank" style="color:#3ea6ff; text-decoration:underline; word-break:break-word;">' + url + '</a>';
+              });
+              return escaped.replace(/\n/g, '<br>');
+          },
+          formatReferenceText: (t) => {
+              if (!t) return '';
+              let escaped = this.utils.escapeHtml(t);
+              const urlRegex = /(https?:\/\/[^\s]+)/g;
+              
+              escaped = escaped.replace(urlRegex, function(url) {
+                  const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+                  if (driveMatch && driveMatch[1]) {
+                      const fileId = driveMatch[1];
+                      return '<div style="margin: 12px 0;"><a href="' + url + '" target="_blank" title="Click to view original"><img src="https://drive.google.com/thumbnail?id=' + fileId + '&sz=w800" style="max-width:100%; max-height:150px; border-radius:8px; border:1px solid var(--border-light); box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: transform 0.2s;" onmouseover="this.style.transform=\'scale(1.02)\'" onmouseout="this.style.transform=\'scale(1)\'" alt="Screenshot Preview" draggable="false"/></a></div><a href="' + url + '" target="_blank" style="color:var(--warning); font-size:12px; font-weight:bold; text-decoration:underline; word-break:break-word;" title="Open Link">' + url + '</a>';
+                  }
+                  return '<a href="' + url + '" target="_blank" style="color:var(--warning); font-weight:bold; text-decoration:underline; word-break:break-word;" title="Open Link">' + url + '</a>';
+              });
+              
+              if (escaped.includes('\n')) {
+                  return escaped.replace(/\n/g, '<br>');
+              } else {
+                  return escaped;
+              }
+          },
+          showToast: (message, type = 'info') => {
+              let container = document.getElementById('toast-container');
+              if (!container) { 
+                  container = document.createElement('div');
+                  container.id = 'toast-container'; document.body.appendChild(container); 
+              }
+              const el = document.createElement('div');
+              el.className = 'toast ' + type; el.innerHTML = '<span>' + message + '</span>'; container.appendChild(el);
+              setTimeout(() => { el.style.animation = 'fadeOutRight 0.4s forwards'; el.addEventListener('animationend', () => el.remove()); }, 4000);
+          },
+          onFailure: (e) => { this.utils.showToast("Error: " + (e.message || "Network Error"), 'error'); },
+          
+          renderCustomSelect: (cid, name, groupedOptions) => {
+              const c = document.getElementById(cid);
+              if (!c) return;
+              c.innerHTML = ''; c.className = 'ms-container';
+              
+              const area = document.createElement('div'); 
+              area.className = 'ms-selection-area'; 
+              area.innerHTML = '<div class="ms-placeholder">Select policy...</div>';
+              
+              const dropdown = document.createElement('div'); 
+              dropdown.className = 'ms-dropdown';
+              
+              if (Array.isArray(groupedOptions)) {
+                  const visibleGroups = groupedOptions.filter(function(g) { return g.isVisible !== false; });
+                  
+                  visibleGroups.forEach(group => {
+                      const groupContainer = document.createElement('div');
+                      groupContainer.className = 'ms-group-container';
+                      
+                      const groupHeader = document.createElement('div');
+                      groupHeader.className = 'ms-group-header';
+                      groupHeader.style.cssText = 'padding: 10px 16px; background: rgba(0,0,0,0.25); font-weight: bold; font-size: 13px; color: var(--primary); display:flex; justify-content:space-between; text-transform:uppercase; cursor:pointer; border-bottom: 1px solid var(--border-light);';
+                      groupHeader.innerHTML = '<span>&#x1F4C1; ' + this.utils.escapeHtml(group.category) + '</span><span class="arrow">▼</span>';
+                      
+                      const groupContent = document.createElement('div');
+                      groupContent.className = 'ms-group-content';
+                      groupContent.style.cssText = 'display: none; background: var(--bg-deep);'; 
+                      
+                      groupHeader.onclick = (e) => {
+                          e.stopPropagation();
+                          const isVisible = groupContent.style.display === 'block';
+                          groupContent.style.display = isVisible ? 'none' : 'block';
+                          groupHeader.querySelector('.arrow').innerText = isVisible ? '▼' : '▲';
+                      };
+
+                      if (group.media && Array.isArray(group.media)) {
+                          group.media.forEach(mediaGroup => {
+                              const mediaContainer = document.createElement('div');
+                              
+                              const mediaHeader = document.createElement('div');
+                              mediaHeader.style.cssText = 'padding: 8px 16px 8px 24px; background: rgba(255,255,255,0.02); font-weight: bold; font-size: 11px; color: var(--text-muted); display:flex; justify-content:space-between; text-transform:uppercase; cursor:pointer; border-bottom: 1px dashed var(--border-light);';
+                              
+                              let icon = "&#x1F4C4;"; 
+                              let t = (mediaGroup.type || "All").toLowerCase();
+                              let isAllMedia = (t === "all"); 
+
+                              if(t.includes("video")) icon = "&#x1F3AC;"; 
+                              else if(t.includes("image") || t.includes("photo")) icon = "&#x1F5BC;&#xFE0F;"; 
+                              else if(t.includes("audio")) icon = "&#x1F50A;"; 
+                              
+                              mediaHeader.innerHTML = '<span>' + icon + ' Media: ' + this.utils.escapeHtml(mediaGroup.type || 'All') + '</span><span class="m-arrow">' + (isAllMedia ? '-' : '+') + '</span>';
+                              
+                              if (isAllMedia) {
+                                  mediaHeader.style.color = 'var(--text-main)';
+                                  mediaHeader.style.background = 'rgba(255,255,255,0.06)';
+                              }
+
+                              const mediaContent = document.createElement('div');
+                              mediaContent.style.cssText = isAllMedia ? 'display: block;' : 'display: none;';
+                              
+                              mediaHeader.onclick = (e) => {
+                                  e.stopPropagation();
+                                  const isVisible = mediaContent.style.display === 'block';
+                                  mediaContent.style.display = isVisible ? 'none' : 'block';
+                                  mediaHeader.querySelector('.m-arrow').innerText = isVisible ? '+' : '-';
+                                  mediaHeader.style.color = isVisible ? 'var(--text-muted)' : 'var(--text-main)';
+                                  mediaHeader.style.background = isVisible ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.06)';
+                              };
+
+                              if (mediaGroup.policies && Array.isArray(mediaGroup.policies)) {
+                                  mediaGroup.policies.forEach(pol => {
+                                      const contextPrefix = '[' + group.category + ' | ' + (mediaGroup.type || 'All') + '] ';
+                                      const fullPolicyStr = contextPrefix + pol;
+                                      
+                                      const opt = document.createElement('div'); 
+                                      opt.className = 'ms-option'; 
+                                      opt.style.cssText = 'padding: 10px 16px 10px 36px; font-size: 13px; cursor: pointer; border-bottom: 1px solid var(--border-light); transition: background 0.1s; display:flex; align-items:center; gap:8px;';
+                                      
+                                      opt.innerHTML = '<span style="width:6px;height:6px;border-radius:50%;background:var(--border-solid);display:inline-block;"></span>' + this.utils.escapeHtml(pol);
+                                      
+                                      opt.onclick = (e) => { 
+                                          e.stopPropagation(); 
+                                          this.utils.toggleOpt(cid, fullPolicyStr); 
+                                      }; 
+                                      mediaContent.appendChild(opt);
+                                  });
+                              }
+                              
+                              mediaContainer.appendChild(mediaHeader);
+                              mediaContainer.appendChild(mediaContent);
+                              groupContent.appendChild(mediaContainer);
+                          });
+                      }
+                      
+                      groupContainer.appendChild(groupHeader);
+                      groupContainer.appendChild(groupContent);
+                      dropdown.appendChild(groupContainer);
+                  });
+              }
+
+              const input = document.createElement('input'); 
+              input.type = 'hidden'; 
+              input.id = cid + '_h';
+              
+              area.onclick = (e) => { 
+                  e.stopPropagation();
+                  const isOpen = dropdown.classList.contains('show'); 
+                  this.utils.closeAllSelectDropdowns(); 
+                  if (!isOpen) { 
+                      dropdown.classList.add('show'); 
+                      area.classList.add('active'); 
+                      this.state.isDropdownOpen = true; 
+                  } 
+              };
+              
+              c.append(area, dropdown, input);
+          },
+          toggleOpt: (cid, val) => {
+              const input = document.getElementById(cid + '_h');
+              let vals = input.value ? input.value.split(',') : [];
+              if (vals.includes(val)) vals = vals.filter(x => x !== val); else vals.push(val);
+              input.value = vals.join(','); this.utils.updateSelectVis(cid, vals);
+          },
+          updateSelectVis: (cid, vals) => {
+              const area = document.getElementById(cid).querySelector('.ms-selection-area');
+              area.innerHTML = '';
+              if (!vals.length || (vals.length === 1 && !vals[0])) { area.innerHTML = '<div class="ms-placeholder">Select policy...</div>'; return; }
+              vals.forEach(v => { 
+                  if (v) { 
+                      const tag = document.createElement('div'); tag.className = 'ms-tag'; 
+                      const textSpan = document.createElement('span'); 
+                      textSpan.innerText = this.utils.truncate(v, 45);
+                      const removeBtn = document.createElement('span'); removeBtn.innerHTML = '&times;'; removeBtn.style.cssText = 'margin-left:6px; cursor:pointer; font-weight:bold; opacity:0.8; font-size:14px;';
+                      removeBtn.onclick = (e) => { e.stopPropagation(); this.utils.toggleOpt(cid, v); };
+                      tag.appendChild(textSpan); tag.appendChild(removeBtn); area.appendChild(tag); 
+                  } 
+              });
+          },
+          getCustomSelectValues: (cid) => {
+              const el = document.getElementById(cid + '_h');
+              return el ? el.value : '';
+          },
+          setCustomSelectValues: (cid, s) => { 
+              const el = document.getElementById(cid + '_h');
+              if (el) { el.value = s; this.utils.updateSelectVis(cid, s ? s.split(',') : []); }
+          },
+          closeAllSelectDropdowns: () => { 
+              const wasOpen = this.state.isDropdownOpen;
+              document.querySelectorAll('.ms-dropdown').forEach(d => d.classList.remove('show'));
+              document.querySelectorAll('.ms-selection-area').forEach(a => a.classList.remove('active')); 
+              this.state.isDropdownOpen = false; 
+              
+              if (wasOpen && this.state.pendingPolicyUpdate) {
+                  this.state.pendingPolicyUpdate = false;
+                  this.renderDynamicSelects();
+              }
+          }
+      };
+    }
+
+    init() {
+      this._initTheme();
+      this._initJixyMemory();
+      this._cacheDomElements();
+      this._bindEvents();
+      this._initJixyEyeTracking();
+      
+      this.updateOfflineBadge();
+      this.utils.showToast("Initializing Unified Queue...", "info");
+      this.fetchTableData(1, "");
+      
+      this.goToStep(1);
+      this.validateStep1();
+      this.validateStep2();
+      this.validateStep3();
+    }
+
+    goToStep(step) {
+        this.state.currentWizardStep = step;
+        document.querySelectorAll('.wizard-step').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.step-indicator').forEach(el => {
+            el.classList.remove('active', 'completed');
+        });
+
+        const stepEl = document.getElementById('step-' + step);
+        if (stepEl) stepEl.classList.add('active');
+
+        for (let i = 1; i <= 3; i++) {
+            const ind = document.getElementById('indicator-' + i);
+            if (!ind) continue;
+            if (i < step) ind.classList.add('completed');
+            else if (i === step) ind.classList.add('active');
+        }
+    }
+
+    validateStep1() {
+        if (!this.dom.inputJobId) return;
+        const jobId = this.dom.inputJobId.value.trim();
+        const btnNext = document.getElementById('btn-next-1');
+        
+        if (jobId.length === 0) {
+            if (btnNext) { btnNext.disabled = true; btnNext.innerHTML = 'Next Step ➔'; }
+            return;
+        }
+
+        if (btnNext) { btnNext.disabled = true; btnNext.innerHTML = 'Verifying...'; }
+
+        clearTimeout(this.state.jobIdCheckTimeout);
+        this.state.jobIdCheckTimeout = setTimeout(() => {
+            this.checkExistingJobId(jobId, btnNext);
+        }, 600);
+    }
+
+    checkExistingJobId(jobId, btnNext) {
+        if (!navigator.onLine) {
+            if (btnNext) { btnNext.disabled = false; btnNext.innerHTML = 'Next Step ➔'; }
+            return;
+        }
+
+        const cleanJobId = jobId.replace(/^'/, "").toLowerCase();
+        const workflow = this.dom.inputWorkflow ? this.dom.inputWorkflow.value.toLowerCase() : 'o18';
+
+        google.script.run.withSuccessHandler((response) => {
+            if (!response || !response.data) {
+                if (btnNext) { btnNext.disabled = false; btnNext.innerHTML = 'Next Step ➔'; }
+                return;
+            }
+
+            const match = response.data.find(r => String(r.jobId).toLowerCase() === cleanJobId && String(r.workflow).toLowerCase() === workflow);
+
+            if (match) {
+                if (btnNext) { btnNext.disabled = true; btnNext.innerHTML = 'Duplicate Job ID'; }
+                
+                let readableState = "PENDING QA";
+                if (match.status.startsWith("RESOLVED")) readableState = "RESOLVED BY QA";
+                else if (match.status.startsWith("PARKED")) readableState = "PARKED BY QA";
+
+                this.utils.showToast("Action Blocked: Job ID is already in the queue (" + readableState + "). Redirecting...", "warning");
+                
+                if (this.dom.inputJobId) this.dom.inputJobId.value = '';
+                
+                setTimeout(() => {
+                    this.triggerSearchFromJixy(match.jobId);
+                    const tableHeader = document.querySelector('.table-header');
+                    if (tableHeader) {
+                        tableHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        const tableWrapper = document.querySelector('.table-wrapper');
+                        if (tableWrapper) {
+                            tableWrapper.style.transition = 'box-shadow 0.3s ease';
+                            tableWrapper.style.boxShadow = '0 0 20px var(--warning)';
+                            setTimeout(() => { tableWrapper.style.boxShadow = 'none'; }, 2000);
+                        }
+                    }
+                }, 800);
+
+            } else {
+                if (btnNext) { btnNext.disabled = false; btnNext.innerHTML = 'Next Step ➔'; }
+            }
+        }).withFailureHandler((e) => {
+            if (btnNext) { btnNext.disabled = false; btnNext.innerHTML = 'Next Step ➔'; }
+        }).getTableData(1, 5, jobId);
+    }
+
+    validateStep2() {
+        const query = this.dom.queryInput ? this.dom.queryInput.value.trim() : '';
+        const response = this.dom.responseInput ? this.dom.responseInput.value.trim() : '';
+        const btnStep2 = document.getElementById('btn-step2-next');
+        
+        if (btnStep2) {
+            if (query.length > 0 || response.length > 0) {
+                btnStep2.innerHTML = 'Next Step ➔';
+                btnStep2.style.background = 'var(--primary)';
+                btnStep2.style.color = '#000'; 
+            } else {
+                btnStep2.innerHTML = 'Skip ➔';
+                btnStep2.style.background = 'transparent';
+                btnStep2.style.color = 'var(--primary)';
+            }
+        }
+    }
+
+    validateStep3() {
+        const policy = this.utils.getCustomSelectValues('agent-policy-checkboxes');
+        const comment = this.dom.inputComment ? this.dom.inputComment.value.trim() : '';
+        const btnSubmit = document.getElementById('btn-submit-final');
+        const warning = this.dom.agentCommentWarning;
+
+        if (comment.length > 0 && comment.length < 15) {
+            if(warning) warning.style.display = 'block';
+        } else {
+            if(warning) warning.style.display = 'none';
+        }
+
+        if (btnSubmit) {
+            btnSubmit.disabled = !(policy && comment.length >= 15);
+        }
+    }
+
+    _generateDataHash(data) {
+        if (!data || !Array.isArray(data)) return '';
+        return data.map(r => r.rowNum + '_' + r.status + '_' + (r.lockedBy || '') + '_' + r.qaCorrectPolicy + '_' + r.qaComment + '_' + r.isGrayArea + '_' + r.raters + '_' + r.query + '_' + r.response).join('|');
+    }
+
+    renderDynamicSelects() {
+      const currentAgentPol = this.utils.getCustomSelectValues('agent-policy-checkboxes');
+      const currentEvalPol = this.utils.getCustomSelectValues('eval-policy-checkboxes');
+      let currentEditPol = '';
+      if (document.getElementById('qa-note-edit-policy')) {
+          currentEditPol = this.utils.getCustomSelectValues('qa-note-edit-policy');
+      }
+
+      const policies = this.state.user.policies || [];
+      this.utils.renderCustomSelect('agent-policy-checkboxes', 'agent-policy', policies);
+      this.utils.renderCustomSelect('eval-policy-checkboxes', 'eval-policy', policies);
+      if (document.getElementById('qa-note-edit-policy')) {
+         this.utils.renderCustomSelect('qa-note-edit-policy', 'qa-pol-edit', policies);
+      }
+
+      if (currentAgentPol) this.utils.setCustomSelectValues('agent-policy-checkboxes', currentAgentPol);
+      if (currentEvalPol) this.utils.setCustomSelectValues('eval-policy-checkboxes', currentEvalPol);
+      if (currentEditPol) this.utils.setCustomSelectValues('qa-note-edit-policy', currentEditPol);
+      
+      this.validateStep3();
+    }
+
+    _initJixyMemory() {
+        const storedQa = localStorage.getItem('flash-assistant-qa-time');
+        if (storedQa) { this.state.lastQaAlertTime = parseInt(storedQa, 10); } 
+        else { this.state.lastQaAlertTime = null; }
+
+        const storedAgent = localStorage.getItem('flash-assistant-agent-time');
+        if (storedAgent) { this.state.lastAgentAlertTime = parseInt(storedAgent, 10); } 
+        else { this.state.lastAgentAlertTime = null; }
+    }
+
+    _initTheme() {
+        const savedTheme = localStorage.getItem('flash-assistant-theme') || 'dark';
+        this.state.theme = savedTheme;
+        document.documentElement.setAttribute('data-theme', this.state.theme);
+    }
+
+    _updateThemeIcons() {
+        const sun = document.getElementById('theme-icon-sun');
+        const moon = document.getElementById('theme-icon-moon');
+        if (sun && moon) {
+            sun.style.display = this.state.theme === 'dark' ? 'block' : 'none';
+            moon.style.display = this.state.theme === 'dark' ? 'none' : 'block';
+        }
+    }
+
+    _toggleTheme() {
+        this.state.theme = this.state.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', this.state.theme);
+        localStorage.setItem('flash-assistant-theme', this.state.theme);
+        this._updateThemeIcons();
+    }
+
+    _cacheDomElements() {
+      const d = document;
+      this.dom = {
+        entryForm: d.getElementById('entry-form'), tableBody: d.getElementById('log-table-body'), emptyState: d.getElementById('empty-state'),
+        searchInput: d.getElementById('table-search-input'), searchSpinner: d.getElementById('search-spinner'), userBadge: d.getElementById('user-role-badge'),
+        prevBtn: d.getElementById('btn-prev-page'), nextBtn: d.getElementById('btn-next-page'), pagInfo: d.getElementById('pagination-info'), statusDot: d.querySelector('.status-dot'),
+        btnThemeToggle: d.getElementById('theme-toggle-btn'), btnHelpGuide: d.getElementById('help-guide-btn'),
+        offlineBadge: d.getElementById('offline-badge'), offlineCount: d.getElementById('offline-count'),
+        inputWorkflow: d.getElementById('workflow-select'), 
+        inputJobId: d.getElementById('job-id-input'), 
+        queryInput: d.getElementById('query-input'),
+        responseInput: d.getElementById('response-input'),
+        inputComment: d.getElementById('agent-comment-input'),
+        agentCommentWarning: d.getElementById('agent-comment-warning'),
+        evalSubmitBtn: d.getElementById('eval-submit-btn'), evalJobIdSpan: d.getElementById('eval-job-id'), evalCommentInput: d.getElementById('eval-comment-input'),
+        evalCommentWarning: d.getElementById('eval-comment-warning'), 
+        btnQaSettings: d.getElementById('qa-settings-btn'),
+        btnGrayAreaDb: d.getElementById('gray-area-db-btn'),
+        evalGrayToggleBox: d.getElementById('qa-gray-area-container'),
+        evalGrayToggleInput: d.getElementById('eval-gray-area-toggle'),
+        editGrayToggleInput: d.getElementById('edit-gray-area-toggle'),
+        qaNoteGrayBadge: d.getElementById('qa-note-gray-badge'),
+        grayAreaPolicyFilter: d.getElementById('gray-area-policy-filter'),
+        grayAreaTableBody: d.getElementById('gray-area-table-body'),
+        grayAreaEmptyState: d.getElementById('gray-area-empty-state'),
+        evalParkBtn: d.getElementById('eval-park-btn'),
+        aiChatWindow: d.getElementById('ai-chat-window'), aiToggleBtn: d.getElementById('ai-toggle-btn'), aiInput: d.getElementById('ai-input'), aiMessages: d.getElementById('ai-messages'), aiQuickChips: d.getElementById('ai-quick-chips'),
+        jixyKbContainer: d.getElementById('settings-jixy-kb-container'), jixyAddRowBtn: d.getElementById('settings-jixy-add-row'),
+        policiesContainer: d.getElementById('settings-policies-container'), policyAddRowBtn: d.getElementById('settings-policy-add-row')
+      };
+      this._updateThemeIcons();
+    }
+
+    _bindEvents() {
+      document.addEventListener('error', (e) => {
+          if (e.target.tagName && e.target.tagName.toLowerCase() === 'img') {
+              if (!e.target.dataset.retried) {
+                  e.target.dataset.retried = 'true';
+                  const driveMatch = e.target.src.match(/id=([a-zA-Z0-9_-]+)/);
+                  if (driveMatch && driveMatch[1]) {
+                      e.target.src = 'https://drive.google.com/uc?export=view&id=' + driveMatch[1];
+                      return;
+                  }
+              }
+              e.target.style.display = 'none';
+          }
+      }, true);
+
+      const bindClick = (el, fn) => { if (el) el.onclick = fn; };
+      const bindIdClick = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
+      const bindEvent = (el, ev, fn) => { if (el) el.addEventListener(ev, fn); };
+
+      bindClick(this.dom.btnThemeToggle, () => this._toggleTheme());
+      bindEvent(this.dom.entryForm, 'submit', (e) => this.handleFormSubmit(e));
+      
+      bindEvent(this.dom.tableBody, 'click', (e) => this.handleTableClick(e));
+      bindEvent(this.dom.grayAreaTableBody, 'click', (e) => this.handleTableClick(e));
+
+      bindEvent(this.dom.evalCommentInput, 'input', () => { if(this.dom.evalCommentWarning) this.dom.evalCommentWarning.style.display = 'none'; });
+
+      [this.dom.queryInput, this.dom.responseInput].forEach(inputEl => {
+          if (inputEl) {
+              bindEvent(inputEl, 'blur', (e) => { e.target.value = e.target.value.trim(); });
+              bindEvent(inputEl, 'paste', (e) => { 
+                  const items = (e.clipboardData || window.clipboardData).items;
+                  let imageItem = null;
+                  for (let i = 0; i < items.length; i++) {
+                      if (items[i].type.indexOf('image/') === 0) {
+                          imageItem = items[i];
+                          break;
+                      }
+                  }
+                  if (imageItem) {
+                      e.preventDefault(); 
+                      const file = imageItem.getAsFile();
+                      if (!file) return;
+                      this._uploadImageBlob(file, inputEl);
+                  } else {
+                      setTimeout(() => { e.target.value = e.target.value.trim(); }, 10); 
+                  }
+              });
+          }
+      });
+
+      document.addEventListener('click', (e) => this.utils.closeAllSelectDropdowns(e));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.utils.closeAllSelectDropdowns(); });
+
+      window.addEventListener('online', () => { this.updateOfflineBadge(); this.processOfflineQueue(); });
+      window.addEventListener('offline', () => this.updateOfflineBadge());
+
+      bindEvent(this.dom.prevBtn, 'mousedown', () => this.changePage(-1));
+      bindEvent(this.dom.nextBtn, 'mousedown', () => this.changePage(1));
+
+      let searchTimeout;
+      if (this.dom.searchInput) {
+          bindEvent(this.dom.searchInput, 'input', (e) => {
+            if (this.dom.searchSpinner) this.dom.searchSpinner.style.display = 'block'; 
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => { 
+                this._pausePolling();
+                this.state.isFetching = false;
+                this.state.searchQuery = e.target.value.trim(); 
+                this.fetchTableData(1, this.state.searchQuery, false, true); 
+            }, 600);
+          });
+      }
+
+      bindClick(this.dom.evalSubmitBtn, () => this.submitAnalysis());
+      bindClick(this.dom.evalParkBtn, () => this.parkAnalysis());
+
+      bindIdClick('eval-close-btn', () => {
+          if (this.state.pendingEval && this.state.pendingEval.isQaAction) { google.script.run.unlockRow(this.state.pendingEval.rowNum); }
+          this.utils.toggleModal('evaluation-modal', false); 
+          if(this.dom.evalCommentWarning) this.dom.evalCommentWarning.style.display = 'none'; 
+          this.startPolling();
+      });
+      
+      bindIdClick('modal-close-btn', () => this.utils.toggleModal('content-modal', false));
+      bindIdClick('qa-note-close-btn', () => this.utils.toggleModal('qa-note-modal', false));
+      bindIdClick('qa-note-edit-cancel-btn', () => this.utils.toggleModal('qa-note-modal', false));
+      bindIdClick('qa-note-modify-btn', () => this.enableQaEditMode());
+      bindIdClick('qa-note-save-btn', () => this.saveResolutionEdit());
+      bindIdClick('reference-close-btn', () => this.utils.toggleModal('reference-modal', false));
+      
+      bindClick(this.dom.btnHelpGuide, () => this.utils.toggleModal('help-modal', true));
+      bindIdClick('help-close-btn', () => this.utils.toggleModal('help-modal', false));
+
+      bindClick(this.dom.btnQaSettings, () => {
+          this.utils.toggleModal('settings-modal', true);
+          google.script.run.withSuccessHandler(settings => {
+              const elEmail = document.getElementById('settings-emails');
+              const elDur = document.getElementById('settings-cd-duration');
+              const elVis = document.getElementById('settings-cd-visibility');
+              if(elEmail) elEmail.value = settings.qaEmails;
+              if(elDur) elDur.value = settings.countdownDuration || 3;
+              if(elVis) elVis.checked = settings.countdownVisibility;
+              this.renderPolicySettings(settings.policies || []);
+              this.renderJixySettings(settings.jixyKB || []);
+          }).getAdminSettings();
+      });
+      
+      bindClick(this.dom.policyAddRowBtn, () => this.addCategoryCard());
+      bindClick(this.dom.jixyAddRowBtn, () => this.addJixySettingsRow());
+      
+      bindIdClick('settings-save-btn', () => this.saveSettings());
+      bindIdClick('settings-close-btn', () => this.utils.toggleModal('settings-modal', false));
+
+      bindClick(this.dom.btnGrayAreaDb, () => this.openGrayAreaModal());
+      bindIdClick('gray-area-close-btn', () => {
+          this.utils.toggleModal('gray-area-modal', false);
+          this.startPolling();
+      });
+
+      if (this.dom.grayAreaPolicyFilter) {
+          bindEvent(this.dom.grayAreaPolicyFilter, 'change', (e) => {
+              this.renderGrayAreaTable(e.target.value);
+          });
+      }
+    }
+
+    _uploadImageBlob(fileBlob, targetInput) {
+        if (!targetInput) return;
+        const originalValue = targetInput.value;
+        targetInput.value = "\uD83D\uDCF8 Uploading screenshot to Shared Drive... please wait.";
+        targetInput.disabled = true;
+        
+        const btnNext2 = document.getElementById('btn-step2-next');
+        if (btnNext2) btnNext2.disabled = true;
+        
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64Data = event.target.result;
+            const mimeType = fileBlob.type || 'image/png';
+            const ext = mimeType.split('/')[1] || 'png';
+            const filename = "Screenshot_" + new Date().getTime() + "." + ext;
+            
+            google.script.run.withSuccessHandler((res) => {
+                targetInput.disabled = false;
+                if (btnNext2) btnNext2.disabled = false;
+                
+                if (res.success) {
+                    const prefix = originalValue ? originalValue + "\n\n" : "";
+                    targetInput.value = prefix + res.url;
+                    this.validateStep2();
+                    this.utils.showToast("Screenshot uploaded successfully!", "success");
+                } else {
+                    targetInput.value = originalValue;
+                    this.utils.showToast(res.message, "error");
+                }
+            }).withFailureHandler((err) => {
+                targetInput.disabled = false;
+                if (btnNext2) btnNext2.disabled = false;
+                targetInput.value = originalValue;
+                this.utils.onFailure(err);
+            }).uploadImageToDrive(base64Data, mimeType, filename);
+        };
+        reader.readAsDataURL(fileBlob);
+    }
+
+    _pausePolling() { if (this.state.pollIntervalId) { clearInterval(this.state.pollIntervalId); this.state.pollIntervalId = null; } }
+
+    updateOfflineBadge() {
+        let queue = JSON.parse(localStorage.getItem('flash-assistant-offline-queue') || '[]');
+        if (this.dom.offlineBadge && this.dom.offlineCount) {
+            if (!navigator.onLine || queue.length > 0) {
+                this.dom.offlineBadge.style.display = 'flex';
+                this.dom.offlineCount.textContent = queue.length;
+            } else { this.dom.offlineBadge.style.display = 'none'; }
+        }
+    }
+
+    processOfflineQueue() {
+        if (!navigator.onLine || this.state.isSyncingOffline) return;
+        let queue = JSON.parse(localStorage.getItem('flash-assistant-offline-queue') || '[]');
+        if (queue.length === 0) { this.updateOfflineBadge(); return; }
+        
+        this.state.isSyncingOffline = true;
+        let data = queue[0];
+        
+        google.script.run.withSuccessHandler((res) => {
+            let currentQueue = JSON.parse(localStorage.getItem('flash-assistant-offline-queue') || '[]'); currentQueue.shift(); localStorage.setItem('flash-assistant-offline-queue', JSON.stringify(currentQueue));
+            this.updateOfflineBadge(); this.state.isSyncingOffline = false;
+            if (res.success) { this.utils.showToast("Offline ticket synced successfully!", "success"); }
+            if (currentQueue.length > 0) { this.processOfflineQueue(); } else { 
+                this.state.isFetching = false;
+                this.fetchTableData(1, ""); 
+            }
+        }).withFailureHandler((e) => { this.state.isSyncingOffline = false; console.error("Offline sync failed."); }).logNewEntry(data);
+    }
+
+    _updatePaginationState(page, totalPages, totalRows) {
+        if (!this.dom.pagInfo) return;
+        this.dom.pagInfo.textContent = 'Page ' + page + ' of ' + (totalPages || 1) + ' (' + totalRows + ' items)';
+        if (this.dom.prevBtn) this.dom.prevBtn.disabled = page <= 1;
+        if (this.dom.nextBtn) this.dom.nextBtn.disabled = page >= totalPages || totalPages === 0;
+    }
+
+    fetchTableData(page, query, showLoadingUI = false, isSearch = false) {
+      if (this.state.isFetching) return;
+      this.state.isFetching = true;
+      if (showLoadingUI) this.utils.showToast("Syncing data...", "info");
+      if (isSearch && this.dom.searchSpinner) this.dom.searchSpinner.style.display = 'block';
+
+      google.script.run.withSuccessHandler((response) => {
+          this.state.isFetching = false;
+          this.state.user = response.user; 
+          this.state.page = response.page; 
+          this.state.totalPages = response.totalPages;
+          
+          this.updateUiForRole();
+          
+          const newPolHash = JSON.stringify(response.user.policies);
+          this.state.lastPoliciesHash = newPolHash;
+          this.renderDynamicSelects();
+
+          this.state.lastDataHash = this._generateDataHash(response.data);
+          this.renderTable(response.data);
+          
+          this._updatePaginationState(this.state.page, this.state.totalPages, response.totalRows);
+          
+          if (this.dom.searchSpinner) this.dom.searchSpinner.style.display = 'none';
+          this.checkJixyAlerts(response.data);
+          this.startPolling();
+        }).withFailureHandler((e) => { 
+          this.state.isFetching = false; 
+          this.utils.onFailure(e);
+          if (this.dom.searchSpinner) this.dom.searchSpinner.style.display = 'none'; 
+        }).getTableData(page, this.CONFIG.PAGE_SIZE, query);
+    }
+
+    startPolling() {
+      this._pausePolling();
+      this.state.pollIntervalId = setInterval(() => {
+        if (this.state.isFetching) return; 
+        this.state.isFetching = true;
+
+        if (this.dom.statusDot) this.dom.statusDot.style.opacity = '0.3';
+        this.processOfflineQueue();
+        
+        google.script.run.withSuccessHandler((response) => {
+             this.state.isFetching = false;
+             this.state.user.countdownDuration = response.user.countdownDuration;
+             this.state.user.countdownVisibility = response.user.countdownVisibility;
+             this.state.user.jixyKB = response.user.jixyKB || [];
+             if (response.user.chatSpaceUrl) this.state.user.chatSpaceUrl = response.user.chatSpaceUrl;
+             
+             const newPolHash = JSON.stringify(response.user.policies);
+             if (this.state.lastPoliciesHash !== newPolHash) {
+                 this.state.lastPoliciesHash = newPolHash;
+                 this.state.user.policies = response.user.policies;
+                 
+                 if (this.state.isDropdownOpen) {
+                     this.state.pendingPolicyUpdate = true;
+                 } else {
+                     this.renderDynamicSelects();
+                 }
+             }
+
+             this.renderTable(response.data); 
+             
+             this._updatePaginationState(this.state.page, this.state.totalPages, response.totalRows);
+             this.checkJixyAlerts(response.data);
+             
+             if (this.dom.statusDot) this.dom.statusDot.style.opacity = '1';
+        }).withFailureHandler((error) => {
+             this.state.isFetching = false;
+             if (this.dom.statusDot) this.dom.statusDot.style.opacity = '1';
+        }).getTableData(this.state.page, this.CONFIG.PAGE_SIZE, this.state.searchQuery);
+      }, this.CONFIG.POLL_INTERVAL_MS);
+    }
+
+    renderTable(data) {
+      if (!this.dom.tableBody) return;
+      if (!data || data.length === 0) { 
+          this.state.activeTimers.forEach(timer => clearInterval(timer));
+          this.state.activeTimers.clear();
+          this.dom.tableBody.innerHTML = ''; 
+          if (this.dom.emptyState) this.dom.emptyState.style.display = 'block'; 
+          return; 
+      }
+      
+      if (this.dom.emptyState) this.dom.emptyState.style.display = 'none';
+      
+      const isNewSearch = this.state.searchQuery && this.state.searchQuery !== this.state.lastRenderedSearch;
+      if (isNewSearch) { this.state.lastRenderedSearch = this.state.searchQuery; } 
+      else if (!this.state.searchQuery) { this.state.lastRenderedSearch = ""; }
+
+      const newRowNums = new Set(data.map(d => String(d.rowNum)));
+      const existingRows = Array.from(this.dom.tableBody.querySelectorAll('tr'));
+      
+      existingRows.forEach(tr => {
+          if (!newRowNums.has(tr.dataset.rowNum)) {
+              if (this.state.activeTimers.has(tr.dataset.rowNum)) {
+                  clearInterval(this.state.activeTimers.get(tr.dataset.rowNum));
+                  this.state.activeTimers.delete(tr.dataset.rowNum);
+              }
+              tr.remove();
+          }
+      });
+
+      data.forEach((rowData, index) => {
+          const rowHash = rowData.rowNum + '_' + rowData.status + '_' + (rowData.lockedBy || '') + '_' + rowData.qaCorrectPolicy + '_' + rowData.qaComment + '_' + rowData.isGrayArea + '_' + rowData.raters + '_' + rowData.query + '_' + rowData.response + '_' + (isNewSearch ? '1' : '0') + '_' + (this.state.highlightTargetJobId || '');
+          
+          let tr = this.dom.tableBody.querySelector('tr[data-row-num="' + rowData.rowNum + '"]');
+          
+          if (tr) {
+              if (tr.dataset.rowHash !== rowHash) {
+                  if (this.state.activeTimers.has(rowData.rowNum)) {
+                      clearInterval(this.state.activeTimers.get(rowData.rowNum));
+                      this.state.activeTimers.delete(rowData.rowNum);
+                  }
+                  const newTr = this.createRowElement(rowData, isNewSearch);
+                  newTr.dataset.rowHash = rowHash;
+                  tr.replaceWith(newTr);
+                  tr = newTr;
+              }
+          } else {
+              tr = this.createRowElement(rowData, isNewSearch);
+              tr.dataset.rowHash = rowHash;
+              this.dom.tableBody.appendChild(tr);
+          }
+
+          if (this.dom.tableBody.children[index] !== tr) {
+              this.dom.tableBody.insertBefore(tr, this.dom.tableBody.children[index]);
+          }
+      });
+    }
+
+    createRowElement(rowData, isNewSearch) {
+      const row = document.createElement('tr');
+      row.dataset.rowNum = rowData.rowNum;
+      
+      const cleanJob = String(rowData.jobId).replace(/^'/, "").trim();
+      const singleLineJob = cleanJob.replace(/\s+/g, ' '); 
+      const cleanJobLower = singleLineJob.toLowerCase();
+      
+      if (isNewSearch || this.state.highlightTargetJobId === cleanJobLower) {
+         row.classList.add('highlight-match');
+         if (this.state.highlightTargetJobId === cleanJobLower) this.state.highlightTargetJobId = null; 
+      }
+      
+      const statusRaw = rowData.status ? rowData.status : '';
+      const isPending = statusRaw === 'PENDING_QA';
+      const isParked = statusRaw.startsWith('PARKED');
+      const isResolved = statusRaw.startsWith('RESOLVED');
+      const myLdap = this.state.user.ldap;
+      
+      if (isPending && rowData.lockedBy && rowData.lockedBy !== myLdap) { 
+          row.classList.add('row-locked'); 
+      }
+      
+      let raters = [];
+      try { raters = typeof rowData.raters === 'string' ? JSON.parse(rowData.raters) : rowData.raters; } catch(e){}
+
+      let pulseClass = '', pulseLabel = '', underReviewBadge = '';
+      if (isPending) {
+         pulseClass = 'pulse-pending'; 
+         pulseLabel = 'Pending QA';
+         if (rowData.lockedBy) {
+             underReviewBadge = '<div style="margin-top: 6px; font-size: 10px; font-weight: bold; color: var(--primary); background: rgba(212, 175, 55, 0.1); padding: 3px 6px; border-radius: 4px; border: 1px dashed rgba(212, 175, 55, 0.4); display: inline-flex; align-items: center; gap: 4px; letter-spacing: 0.5px; white-space: nowrap;">&#x1F50E; UNDER QA REVIEW</div>';
+         }
+      } else if (isParked) {
+         pulseClass = 'pulse-parked'; pulseLabel = 'Parked';
+      } else if (isResolved) {
+         const isSafe = rowData.qaCorrectPolicy.toLowerCase().includes('no violation') || rowData.qaCorrectPolicy.toLowerCase().includes('safe');
+         pulseClass = isSafe ? 'pulse-safe' : 'pulse-violation';
+         pulseLabel = isSafe ? 'Safe' : 'Violation';
+      }
+
+      const iHaveCommented = raters.some(r => r.ldap === myLdap);
+      const threadCount = raters.length;
+      
+      const d = new Date(rowData.timestamp);
+      const timeStr = d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      const dateStr = d.toLocaleDateString([], {day: '2-digit', month: '2-digit', year: 'numeric'});
+      
+      const escapedFullJobId = this.utils.escapeHtml(cleanJob);
+      const encodedJobId = encodeURIComponent(cleanJob);
+      const encodedQuery = encodeURIComponent(rowData.query || "");
+      const encodedResponse = encodeURIComponent(rowData.response || "");
+
+      let previewHtml = '';
+      const combinedPayload = String(rowData.jobId || '') + ' ' + String(rowData.query || '') + ' ' + String(rowData.response || '');
+      const driveMatch = combinedPayload.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if(driveMatch && driveMatch[1]) {
+          const fileId = driveMatch[1];
+          previewHtml = '<div style="margin-top:8px;"><img src="https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400" style="max-height:55px; border-radius:6px; border:1px solid var(--border-light); cursor:zoom-in; transition: transform 0.2s;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" data-action="view-reference" data-jobid="' + encodedJobId + '" data-query="' + encodedQuery + '" data-response="' + encodedResponse + '" title="Click to expand full payload and image" draggable="false" /></div>';
+      }
+      
+      const tdQaNote = (isResolved || isParked)
+          ? '<td data-action="view-qa-note" data-rownum="' + rowData.rowNum + '" data-jobid="' + encodedJobId + '" data-qaldap="' + (rowData.qaLdap || '') + '" data-qanote="' + encodeURIComponent(rowData.qaComment) + '" data-qapol="' + encodeURIComponent(rowData.qaCorrectPolicy) + '" data-isgrayarea="' + rowData.isGrayArea + '" style="color:var(--text-muted); font-size:15px; cursor:pointer; text-decoration:underline dashed rgba(150,150,150,0.5); text-underline-offset: 4px; transition:color 0.2s;" onmouseover="this.style.color=\'var(--primary)\'" onmouseout="this.style.color=\'var(--text-muted)\'" title="Click to read full QA Note or Edit">' + this.utils.truncate(rowData.qaComment, 20) + '</td>'
+          : '<td style="color:var(--text-muted); font-size:15px;">-</td>';
+          
+      const showTimer = this.state.user.isQa || this.state.user.countdownVisibility;
+      const displayTimerStyle = showTimer ? 'table-cell' : 'none';
+      const escapedTruncatedJobId = this.utils.escapeHtml(this.utils.truncate(singleLineJob, 45));
+      
+      const jobIdHtml = '<div class="job-id-cell"><span class="job-id-text" data-action="view-reference" data-jobid="' + encodedJobId + '" data-query="' + encodedQuery + '" data-response="' + encodedResponse + '" style="cursor:pointer; text-decoration:underline dashed rgba(150,150,150,0.5); text-underline-offset:4px; transition:color 0.2s;" onmouseover="this.style.color=\'var(--primary)\'" onmouseout="this.style.color=\'\'" title="Click to view full reference">' + escapedTruncatedJobId + '</span><button class="btn-copy-inline" data-action="copy-jobid" data-jobid="' + escapedFullJobId + '" title="Copy Reference">Copy</button>' + previewHtml + '</div>';
+
+      row.innerHTML = 
+        '<td class="font-mono" style="line-height:1.3;">' +
+           '<span style="display:block; font-size:13px; font-weight:bold; color:var(--text-main);">' + timeStr + '</span>' +
+           '<span style="display:block; font-size:10px; color:var(--text-muted); margin-top:2px;">' + dateStr + '</span>' +
+        '</td>' +
+        '<td><div class="pulse-container ' + pulseClass + '"><div class="pulse-dot"></div><span class="pulse-label">' + pulseLabel + '</span></div>' + underReviewBadge + '</td>' +
+        '<td><span style="background:var(--bg-hover); border:1px solid var(--border-light); padding:4px 8px; border-radius:4px; font-size:13px;">' + this.utils.escapeHtml(rowData.workflow) + '</span></td>' +
+        '<td class="font-mono" style="font-weight:bold; font-size:15px;">' + jobIdHtml + '</td>' +
+        '<td><span style="font-size:13px; color:var(--text-muted);">' + ((isResolved || isParked) ? 'Analyses Revealed' : 'Open Thread (' + threadCount + ' notes)') + '</span></td>' +
+        '<td style="color:var(--primary); font-weight:bold; font-size:15px;">' + ((isResolved || isParked) ? this.utils.escapeHtml(rowData.qaCorrectPolicy) : '-') + '</td>' +
+        tdQaNote +
+        '<td class="timer-cell" style="text-align:center; font-family:var(--font-mono); font-size:14px; display:' + displayTimerStyle + ';">-</td>' +
+        '<td class="action-cell" style="text-align:center;"></td>';
+
+      this.renderActionCell(row, isPending, isParked, isResolved, iHaveCommented, raters, rowData);
+      
+      if (showTimer) {
+         if (isPending) { this.startTimerForRow(rowData.rowNum, rowData.timestamp, row.querySelector('.timer-cell')); } 
+         else if (isParked) { row.querySelector('.timer-cell').innerHTML = '<span style="color:var(--purple); font-size:12px; font-weight:bold;">PARKED</span>'; }
+         else if (isResolved) { row.querySelector('.timer-cell').innerHTML = '<span style="color:var(--text-muted); font-size:12px;">QA STOP</span>'; }
+      }
+
+      return row;
+    }
+
+    startTimerForRow(rowKey, timestampStr, cell) {
+        if (this.state.activeTimers.has(rowKey)) { clearInterval(this.state.activeTimers.get(rowKey)); }
+        const durationMs = (this.state.user.countdownDuration || 3) * 60 * 1000;
+        const endTime = new Date(timestampStr).getTime() + durationMs;
+
+        const tick = () => {
+            const remaining = endTime - Date.now();
+            if (remaining <= 0) {
+                if (this.state.activeTimers.has(rowKey)) { clearInterval(this.state.activeTimers.get(rowKey)); this.state.activeTimers.delete(rowKey); }
+                cell.innerHTML = '<span class="timer-expired">EXPIRED</span>';
+            } else {
+                const m = Math.floor(remaining / 60000); const s = Math.floor((remaining % 60000) / 1000);
+                cell.innerHTML = '<span class="timer-active">' + this.utils.pad(m) + ':' + this.utils.pad(s) + '</span>';
+            }
+        };
+        tick();
+        this.state.activeTimers.set(rowKey, setInterval(tick, 1000));
+    }
+
+    renderActionCell(row, isPending, isParked, isResolved, iHaveCommented, raters, rowData) {
+      const cell = row.querySelector('.action-cell');
+      const isQa = this.state.user.isQa;
+
+      if (isQa) {
+          if (isPending || isParked) {
+              let btnsHtml = '<div style="display:flex; flex-direction:column; align-items:center; gap:6px;">';
+              const isLockedByOther = rowData.lockedBy && rowData.lockedBy !== this.state.user.ldap;
+              
+              if (isLockedByOther) {
+                  btnsHtml += '<span class="lock-badge">&#x1F512; ' + this.utils.escapeHtml(rowData.lockedBy) + '</span><button class="btn-resolve" disabled title="Locked by another QA" style="width:100%;">Locked</button>';
+              } else if (rowData.lockedBy === this.state.user.ldap) {
+                  btnsHtml += '<span class="lock-badge" style="background:rgba(16, 185, 129, 0.1); color:var(--success); border-color:var(--success);">YOUR LOCK</span><button class="btn-resolve" data-action="qa-resolve" data-job="' + encodeURIComponent(rowData.jobId) + '" style="width:100%;">' + (isParked ? 'Resume' : 'Resume Review') + '</button>';
+              } else {
+                  btnsHtml += '<button class="btn-resolve" data-action="qa-resolve" data-job="' + encodeURIComponent(rowData.jobId) + '" style="width:100%;">' + (isParked ? 'Resume' : 'Resolve') + '</button>';
+              }
+              
+              if (raters.length > 0) { btnsHtml += '<button class="btn-view-thread" data-action="view-thread" data-qaldap="" data-thread="' + encodeURIComponent(JSON.stringify(raters)) + '" data-qanote="" data-qapol="" style="width:100%;">View Thread</button>'; }
+              btnsHtml += '</div>'; cell.innerHTML = btnsHtml;
+          } else {
+              cell.innerHTML = '<button class="btn-view-thread" data-action="view-thread" data-qaldap="' + (rowData.qaLdap || '') + '" data-thread="' + encodeURIComponent(JSON.stringify(raters)) + '" data-qanote="' + encodeURIComponent(rowData.qaComment) + '" data-qapol="' + encodeURIComponent(rowData.qaCorrectPolicy) + '">Reveal Thread</button>';
+          }
+          return;
+      }
+
+      if (isPending || isParked) {
+          let html = '<div style="display:flex; flex-direction:column; align-items:center; gap:6px;">';
+          
+          if (isPending && rowData.lockedBy) {
+               html += '<span style="font-size:11px; color:var(--warning); text-transform:uppercase; font-weight:bold; background:rgba(251, 191, 36, 0.1); padding:4px 8px; border-radius:4px; width:100%; text-align:center;">Reviewing...</span>';
+          } else if (!iHaveCommented && !isParked) { 
+              html += '<button class="btn-add-analysis" data-action="add-analysis" data-job="' + encodeURIComponent(rowData.jobId) + '" data-wf="' + rowData.workflow + '" style="width:100%;">Add Analysis</button>'; 
+          } else { 
+              html += '<span style="font-size:12px; color:var(--text-muted); text-transform:uppercase; font-weight:600;">Waiting QA</span>'; 
+          }
+          
+          if (raters.length > 0) { html += '<button class="btn-view-thread" data-action="view-thread" data-qaldap="" data-thread="' + encodeURIComponent(JSON.stringify(raters)) + '" data-qanote="" data-qapol="" style="width:100%;">View Thread</button>'; }
+          html += '</div>'; cell.innerHTML = html;
+      } else if (isResolved) {
+          cell.innerHTML = '<button class="btn-view-thread" data-action="view-thread" data-qaldap="' + (rowData.qaLdap || '') + '" data-thread="' + encodeURIComponent(JSON.stringify(raters)) + '" data-qanote="' + encodeURIComponent(rowData.qaComment) + '" data-qapol="' + encodeURIComponent(rowData.qaCorrectPolicy) + '">Reveal Thread</button>';
+      }
+    }
+
+    handleFormSubmit(event) {
+      event.preventDefault();
+      
+      const rawComment = this.dom.inputComment ? this.dom.inputComment.value.trim() : '';
+      if (rawComment.length < 15) {
+          if(this.dom.agentCommentWarning) this.dom.agentCommentWarning.style.display = 'block';
+          this.utils.showToast("Action Blocked: Please provide a valid rationale.", "error");
+          return;
+      }
+
+      const submitBtn = event.target.querySelector('button[type="submit"]');
+      const origText = submitBtn.innerHTML;
+      
+      const baseJobId = this.dom.inputJobId ? this.dom.inputJobId.value.trim() : '';
+      const rawQuery = this.dom.queryInput ? this.dom.queryInput.value.trim() : '';
+      const rawResponse = this.dom.responseInput ? this.dom.responseInput.value.trim() : '';
+      const agentPolicy = this.utils.getCustomSelectValues('agent-policy-checkboxes');
+      
+      if (!baseJobId || !agentPolicy) { 
+          this.utils.showToast("Please fill in all required fields.", "warning"); 
+          return; 
+      }
+
+      const data = { 
+          workflow: this.dom.inputWorkflow ? this.dom.inputWorkflow.value : 'o18', 
+          jobId: baseJobId, 
+          query: rawQuery,
+          response: rawResponse,
+          agentPolicy: agentPolicy, 
+          agentComment: rawComment 
+      };
+
+      submitBtn.disabled = true; submitBtn.innerHTML = 'ESCALATING...';
+      
+      if (!navigator.onLine) {
+          let queue = JSON.parse(localStorage.getItem('flash-assistant-offline-queue') || '[]');
+          let existingIndex = queue.findIndex(item => item.jobId === data.jobId);
+          if (existingIndex !== -1) { queue[existingIndex] = data; this.utils.showToast("Offline ticket updated.", "info"); } 
+          else { queue.push(data); this.utils.showToast("No connection. Ticket saved offline and will sync automatically.", "warning"); }
+          localStorage.setItem('flash-assistant-offline-queue', JSON.stringify(queue));
+          
+          if(this.dom.entryForm) this.dom.entryForm.reset(); 
+          this.utils.setCustomSelectValues('agent-policy-checkboxes', '', this.state.user.policies); 
+          this.updateOfflineBadge();
+          
+          this.goToStep(1); 
+          this.validateStep1();
+          this.validateStep2();
+          this.validateStep3();
+          
+          submitBtn.disabled = false; submitBtn.innerHTML = origText; return; 
+      }
+
+      this._pausePolling();
+      google.script.run.withSuccessHandler(res => {
+        submitBtn.disabled = false; submitBtn.innerHTML = origText;
+        this.state.highlightTargetJobId = baseJobId.replace(/\s+/g, ' ').toLowerCase();
+        
+        if (res.success) {
+          this.utils.showToast(res.message, "success"); 
+          if(this.dom.entryForm) this.dom.entryForm.reset(); 
+          this.utils.setCustomSelectValues('agent-policy-checkboxes', '', this.state.user.policies);
+          
+          this.goToStep(1); 
+          this.validateStep1();
+          this.validateStep2();
+          this.validateStep3();
+
+          if (res.message.includes("integrated") || res.message.includes("Blind Thread")) { 
+              if(this.dom.searchInput) this.dom.searchInput.value = baseJobId; 
+              this.state.searchQuery = baseJobId; 
+          } else { 
+              if(this.dom.searchInput) this.dom.searchInput.value = ""; 
+              this.state.searchQuery = ""; 
+          }
+          
+          this.state.isFetching = false;
+          this.fetchTableData(1, this.state.searchQuery, false, true); 
+        } else {
+          this.utils.showToast(res.message, "error");
+          if (res.message.includes("already") || res.message.includes("resolved")) { 
+              if(this.dom.searchInput) this.dom.searchInput.value = baseJobId; 
+              this.state.searchQuery = baseJobId; 
+              this.state.isFetching = false;
+              this.fetchTableData(1, this.state.searchQuery, false, true); 
+          }
+        }
+      }).withFailureHandler(e => { submitBtn.disabled = false; submitBtn.innerHTML = origText; this.utils.onFailure(e); }).logNewEntry(data);
+    }
+
+    handleTableClick(e) {
+      const target = e.target.closest('[data-action]');
+      if (!target) return;
+      const row = target.closest('tr');
+      const action = target.dataset.action;
+      
+      if (action === 'view-reference') {
+         const jobId = decodeURIComponent(target.dataset.jobid);
+         const query = decodeURIComponent(target.dataset.query);
+         const response = decodeURIComponent(target.dataset.response);
+
+         const setupCard = (id, text, label) => {
+             const container = document.getElementById(id);
+             if (!container) return;
+             const parent = container.parentElement;
+             
+             parent.style.position = 'relative';
+
+             const oldBtn = parent.querySelector('.copy-card-btn');
+             if (oldBtn) oldBtn.remove();
+
+             const btn = document.createElement('button');
+             btn.className = 'icon-btn copy-card-btn';
+             btn.style.cssText = 'position:absolute; right:12px; top:12px; width:30px; height:30px; background:rgba(255,255,255,0.05); border:1px solid var(--border-solid); color:var(--text-muted); cursor:pointer; border-radius:6px; display:flex; align-items:center; justify-content:center; transition: all 0.2s;';
+             btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+             btn.title = 'Copy ' + label;
+             btn.onmouseover = () => btn.style.background = 'var(--bg-deep)';
+             btn.onmouseout = () => btn.style.background = 'rgba(255,255,255,0.05)';
+             
+             if (text) {
+                 btn.onclick = function() { window.copyTextToClipboard(text, this); };
+                 parent.appendChild(btn);
+             }
+
+             if (!text) {
+                 container.innerHTML = '<span style="color:var(--text-muted); font-style:italic;">N/A</span>';
+                 return;
+             }
+
+             const MAX_CHARS = 40; 
+             let formattedHtml = this.utils.formatReferenceText(text);
+             
+             const hasDriveLink = /drive\.google\.com/.test(text);
+             
+             if (!hasDriveLink && text.length > MAX_CHARS) {
+                 const truncatedText = text.substring(0, MAX_CHARS) + '...';
+                 const truncatedHTML = this.utils.formatReferenceText(truncatedText);
+                 
+                 container.innerHTML = '<div class="preview-text">' + truncatedHTML + '</div>' +
+                     '<div class="full-text" style="display:none;">' + formattedHtml + '</div>' +
+                     '<a href="#" class="expand-btn" style="color:var(--primary); font-size:12px; text-decoration:none; display:inline-block; margin-top:8px; font-weight:bold; padding:4px 8px; background:rgba(59, 130, 246, 0.1); border-radius:4px;">Read More ▼</a>';
+                 
+                 const expandBtn = container.querySelector('.expand-btn');
+                 expandBtn.onclick = (e) => {
+                     e.preventDefault();
+                     const isExpanded = expandBtn.innerText.includes('Less');
+                     container.querySelector('.preview-text').style.display = isExpanded ? 'block' : 'none';
+                     container.querySelector('.full-text').style.display = isExpanded ? 'none' : 'block';
+                     expandBtn.innerText = isExpanded ? 'Read More ▼' : 'Show Less ▲';
+                 };
+             } else {
+                 container.innerHTML = formattedHtml;
+             }
+         };
+
+         setupCard('modal-ref-jobid', jobId, 'Job ID');
+         setupCard('modal-ref-query', query, 'Query');
+         setupCard('modal-ref-response', response, 'Response');
+         
+         const refModal = document.getElementById('reference-modal');
+         if(refModal) {
+             refModal.style.zIndex = '1050';
+             this.utils.toggleModal('reference-modal', true);
+         }
+      }
+      else if (action === 'add-analysis') {
+         const decodedJobId = decodeURIComponent(target.dataset.job);
+         this.state.pendingEval = { isQaAction: false, workflow: target.dataset.wf, jobId: decodedJobId };
+         if (this.dom.evalJobIdSpan) {
+             this.dom.evalJobIdSpan.textContent = decodedJobId;
+             this.dom.evalJobIdSpan.title = decodedJobId;
+         }
+         this.utils.setCustomSelectValues('eval-policy-checkboxes', '', this.state.user.policies);
+         if (this.dom.evalCommentInput) this.dom.evalCommentInput.value = '';
+         if(this.dom.evalCommentWarning) this.dom.evalCommentWarning.style.display = 'none'; 
+         const titleEl = document.getElementById('eval-modal-title');
+         if (titleEl) titleEl.textContent = 'Add Blind Analysis';
+         if (this.dom.evalGrayToggleBox) this.dom.evalGrayToggleBox.style.display = 'none';
+         if(this.dom.evalParkBtn) this.dom.evalParkBtn.style.display = 'none';
+         this.utils.toggleModal('evaluation-modal', true);
+      } 
+      else if (action === 'qa-resolve') {
+         const rowNum = row.dataset.rowNum;
+         const decodedJobId = decodeURIComponent(target.dataset.job);
+         const origText = target.innerHTML;
+         
+         target.disabled = true; target.innerHTML = 'LOCKING...';
+         this._pausePolling();
+         
+         google.script.run.withSuccessHandler(res => {
+             target.disabled = false; target.innerHTML = origText;
+             if (res.success) {
+                 this.state.pendingEval = { isQaAction: true, rowNum: rowNum, jobId: decodedJobId };
+                 if (this.dom.evalJobIdSpan) {
+                     this.dom.evalJobIdSpan.textContent = decodedJobId;
+                     this.dom.evalJobIdSpan.title = decodedJobId;
+                 }
+                 const titleEl = document.getElementById('eval-modal-title');
+                 if (titleEl) titleEl.textContent = 'QA Resolution';
+                 this.utils.setCustomSelectValues('eval-policy-checkboxes', '', this.state.user.policies);
+                 if (this.dom.evalCommentInput) this.dom.evalCommentInput.value = '';
+                 if(this.dom.evalCommentWarning) this.dom.evalCommentWarning.style.display = 'none'; 
+                 if (this.dom.evalGrayToggleBox) this.dom.evalGrayToggleBox.style.display = 'block';
+                 if (this.dom.evalGrayToggleInput) this.dom.evalGrayToggleInput.checked = false;
+                 if(this.dom.evalParkBtn) this.dom.evalParkBtn.style.display = 'inline-flex';
+                 this.utils.toggleModal('evaluation-modal', true);
+             } else {
+                 this.utils.showToast("Ticket is currently locked by " + res.lockedBy.toUpperCase(), "warning");
+                 this.state.isFetching = false;
+                 this.startPolling(); 
+             }
+         }).withFailureHandler(e => { target.disabled = false; target.innerHTML = origText; this.utils.onFailure(e); }).lockRow(rowNum);
+      }
+      else if (action === 'view-qa-note') {
+         this.openQaNoteModal(target.dataset.qapol, target.dataset.qanote, target.dataset.qaldap, target.dataset.jobid, target.dataset.rownum, target.dataset.isgrayarea);
+      }
+      else if (action === 'copy-jobid') {
+         this.copyJobId(target.dataset.jobid, target);
+      }
+      else if (action === 'view-thread') {
+         this.openThreadModal(target.dataset.thread, target.dataset.qapol, target.dataset.qanote, target.dataset.qaldap);
+      }
+    }
+
+    copyJobId(jobId, btnElement = null) {
+      if (!jobId) return;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(jobId).then(() => {
+            if (btnElement && window.showCopyFeedback) window.showCopyFeedback(btnElement);
+            else this.utils.showToast('Reference copied to clipboard', 'success');
+        }).catch(() => this.utils.showToast('Copy failed', 'error'));
+      } else {
+        const copyField = document.createElement('textarea'); copyField.value = jobId; copyField.style.position = 'fixed';
+        copyField.style.left = '-99999px'; document.body.appendChild(copyField); copyField.select();
+        try { 
+            document.execCommand('copy'); 
+            if (btnElement && window.showCopyFeedback) window.showCopyFeedback(btnElement);
+            else this.utils.showToast('Reference copied to clipboard', 'success'); 
+        } catch (err) { this.utils.showToast('Copy failed', 'error'); }
+        document.body.removeChild(copyField);
+      }
+    }
+
+    parkAnalysis() {
+        if (!this.state.pendingEval || !this.state.pendingEval.isQaAction) return;
+        const jobId = this.state.pendingEval.jobId;
+        const policyInput = document.getElementById('eval-policy-checkboxes_h');
+        const policySelected = (policyInput && policyInput.value) ? policyInput.value : "None Selected";
+        const commentInput = document.getElementById('eval-comment-input');
+        const rationaleText = (commentInput && commentInput.value) ? commentInput.value.trim() : "No rationale provided";
+        
+        const chatMessage = "Hey, please guys I need your help with this case:\n" + jobId + "\n\uD83D\uDCCC Tentative Verdict: " + policySelected + "\n\uD83D\uDCAC Context: \"" + rationaleText + "\"";
+        const textArea = document.createElement("textarea");
+        textArea.value = chatMessage;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try { document.execCommand('copy'); } catch (err) {}
+        textArea.remove();
+
+        const origText = this.dom.evalParkBtn.innerHTML;
+        this.dom.evalParkBtn.disabled = true; this.dom.evalParkBtn.innerHTML = 'PARKING...';
+
+        this._pausePolling();
+
+        google.script.run.withSuccessHandler(res => {
+            if(this.dom.evalParkBtn) {
+                this.dom.evalParkBtn.disabled = false; 
+                this.dom.evalParkBtn.innerHTML = origText;
+            }
+            this.utils.toggleModal('evaluation-modal', false);
+
+            if(res.success) {
+                this.utils.showToast("Case Parked. Chat message copied to clipboard!", "success");
+                setTimeout(() => {
+                    const targetChatUrl = (this.state.user && this.state.user.chatSpaceUrl) ? this.state.user.chatSpaceUrl : 'https://chat.google.com/';
+                    window.open(targetChatUrl, '_blank');
+                    this.state.isFetching = false;
+                    this.fetchTableData(1, "", false);
+                }, 800);
+            } else {
+                this.utils.showToast(res.message, "error");
+            }
+         }).withFailureHandler(e => { 
+            if(this.dom.evalParkBtn) {
+                this.dom.evalParkBtn.disabled = false; 
+                this.dom.evalParkBtn.innerHTML = origText; 
+            }
+            this.utils.onFailure(e); 
+        }).parkByQa(parseInt(this.state.pendingEval.rowNum), policySelected, rationaleText);
+    }
+
+    submitAnalysis() {
+        if (!this.state.pendingEval) return;
+        
+        const rawComment = this.dom.evalCommentInput ? this.dom.evalCommentInput.value.trim() : '';
+        if (!this.state.pendingEval.isQaAction && rawComment.length < 15) {
+            if(this.dom.evalCommentWarning) this.dom.evalCommentWarning.style.display = 'block';
+            this.utils.showToast("Action Blocked: Please provide a valid rationale.", "error");
+            return;
+        }
+
+        const policy = this.utils.getCustomSelectValues('eval-policy-checkboxes');
+        const isGrayArea = this.dom.evalGrayToggleInput ? this.dom.evalGrayToggleInput.checked : false; 
+
+        if (!policy) { this.utils.showToast("Please select a policy", "error"); return; }
+
+        if(!this.dom.evalSubmitBtn) return;
+        const origText = this.dom.evalSubmitBtn.innerHTML;
+        this.dom.evalSubmitBtn.disabled = true; this.dom.evalSubmitBtn.innerHTML = 'SAVING...';
+
+        this._pausePolling();
+        
+        if (this.state.pendingEval.isQaAction) {
+            google.script.run.withSuccessHandler(res => {
+                if(this.dom.evalSubmitBtn) { this.dom.evalSubmitBtn.disabled = false; this.dom.evalSubmitBtn.innerHTML = origText; }
+                this.utils.toggleModal('evaluation-modal', false);
+                if(res.success) {
+                    this.state.isFetching = false;
+                    this.fetchTableData(1, "", true);
+                }
+            }).withFailureHandler(e => { 
+                if(this.dom.evalSubmitBtn) { this.dom.evalSubmitBtn.disabled = false; this.dom.evalSubmitBtn.innerHTML = origText; } 
+                this.utils.onFailure(e); 
+            }).resolveByQa(parseInt(this.state.pendingEval.rowNum), policy, rawComment, isGrayArea);
+        } else {
+            const data = { workflow: this.state.pendingEval.workflow, jobId: this.state.pendingEval.jobId, agentPolicy: policy, agentComment: rawComment };
+            if (!navigator.onLine) {
+                if(this.dom.evalSubmitBtn) { this.dom.evalSubmitBtn.disabled = false; this.dom.evalSubmitBtn.innerHTML = origText; }
+                this.utils.toggleModal('evaluation-modal', false);
+                let queue = JSON.parse(localStorage.getItem('flash-assistant-offline-queue') || '[]'); let existingIndex = queue.findIndex(item => item.jobId === data.jobId);
+                if (existingIndex !== -1) { queue[existingIndex] = data; this.utils.showToast("Offline analysis updated.", "info"); } 
+                else { queue.push(data); this.utils.showToast("No connection. Analysis saved offline.", "warning"); }
+                localStorage.setItem('flash-assistant-offline-queue', JSON.stringify(queue));
+                this.updateOfflineBadge(); this.startPolling(); return;
+            }
+            google.script.run.withSuccessHandler(res => {
+                if(this.dom.evalSubmitBtn) { this.dom.evalSubmitBtn.disabled = false; this.dom.evalSubmitBtn.innerHTML = origText; }
+                this.utils.toggleModal('evaluation-modal', false);
+                if(res.success) { 
+                    this.utils.showToast(res.message, "success"); 
+                    this.state.isFetching = false;
+                    this.fetchTableData(1, "", true); 
+                } 
+                else { this.utils.showToast(res.message, "error"); }
+            }).withFailureHandler(e => { 
+                if(this.dom.evalSubmitBtn) { this.dom.evalSubmitBtn.disabled = false; this.dom.evalSubmitBtn.innerHTML = origText; } 
+                this.utils.onFailure(e); 
+            }).logNewEntry(data);
+        }
+    }
+
+    openQaNoteModal(qaPolEnc, qaNoteEnc, qaLdap, jobIdEnc, rowNum, isGrayAreaStr) {
+        const qaPol = decodeURIComponent(qaPolEnc);
+        const qaNote = decodeURIComponent(qaNoteEnc);
+        const jobId = decodeURIComponent(jobIdEnc);
+        const isGrayArea = isGrayAreaStr === 'true';
+        const isQaUser = this.state.user.isQa;
+        const isAuthorQa = (this.state.user.ldap === qaLdap);
+        
+        this.state.editingRowNum = rowNum;
+        
+        const authorDisplay = isQaUser ? this.utils.escapeHtml(qaLdap) : 'ID Hidden';
+        const isSafe = qaPol.toLowerCase().includes('no violation') || qaPol.toLowerCase().includes('safe');
+        const qaColor = isSafe ? 'var(--success)' : 'var(--error)';
+
+        const jobSpan = document.getElementById('qa-note-job-id');
+        if(jobSpan) { jobSpan.textContent = jobId; jobSpan.title = jobId; }
+        
+        const authorEl = document.getElementById('qa-note-author');
+        if(authorEl) authorEl.textContent = authorDisplay;
+
+        const polEl = document.getElementById('qa-note-policy');
+        if(polEl) { polEl.textContent = qaPol; polEl.style.color = qaColor; }
+
+        const textEl = document.getElementById('qa-note-text');
+        if(textEl) textEl.innerHTML = this.utils.formatRichText(qaNote);
+
+        if (this.dom.qaNoteGrayBadge) {
+            this.dom.qaNoteGrayBadge.style.display = (isGrayArea && isQaUser) ? 'block' : 'none';
+        }
+
+        const viewSec = document.getElementById('qa-note-view-section');
+        if(viewSec) viewSec.style.display = 'block';
+
+        const editSec = document.getElementById('qa-note-edit-section');
+        if(editSec) editSec.style.display = 'none';
+        
+        const modifyBtn = document.getElementById('qa-note-modify-btn');
+        if (isAuthorQa && modifyBtn) {
+            modifyBtn.style.display = 'inline-block';
+            this.utils.renderCustomSelect('qa-note-edit-policy', 'qa-pol-edit', this.state.user.policies);
+            this.utils.setCustomSelectValues('qa-note-edit-policy', qaPol);
+            const editText = document.getElementById('qa-note-edit-text');
+            if(editText) editText.value = qaNote;
+            if(this.dom.editGrayToggleInput) this.dom.editGrayToggleInput.checked = isGrayArea;
+        } else if (modifyBtn) { 
+            modifyBtn.style.display = 'none'; 
+        }
+
+        this.utils.toggleModal('qa-note-modal', true);
+    }
+
+    enableQaEditMode() {
+        const viewSec = document.getElementById('qa-note-view-section');
+        if(viewSec) viewSec.style.display = 'none';
+        const editSec = document.getElementById('qa-note-edit-section');
+        if(editSec) editSec.style.display = 'block';
+    }
+
+    saveResolutionEdit() {
+        const newPolicy = this.utils.getCustomSelectValues('qa-note-edit-policy');
+        const editText = document.getElementById('qa-note-edit-text');
+        const newNote = editText ? editText.value : '';
+        const isGrayArea = this.dom.editGrayToggleInput ? this.dom.editGrayToggleInput.checked : false;
+        const rowNum = this.state.editingRowNum;
+        
+        if (!newPolicy) { this.utils.showToast("Please select a policy", "error"); return; }
+        
+        const saveBtn = document.getElementById('qa-note-save-btn');
+        if(!saveBtn) return;
+
+        const origText = saveBtn.innerHTML;
+        saveBtn.disabled = true; saveBtn.innerHTML = 'SAVING...';
+
+        this._pausePolling();
+        
+        google.script.run.withSuccessHandler(res => {
+            saveBtn.disabled = false; saveBtn.innerHTML = origText;
+            this.utils.toggleModal('qa-note-modal', false);
+            if(res.success) { 
+                this.utils.showToast(res.message, "success"); 
+                this.state.isFetching = false;
+                this.fetchTableData(1, "", true); 
+            } 
+            else { this.utils.showToast(res.message, "error"); }
+        }).withFailureHandler(e => { saveBtn.disabled = false; saveBtn.innerHTML = origText; this.utils.onFailure(e); }).editQaResolution(parseInt(rowNum), newPolicy, newNote, isGrayArea);
+    }
+
+    openThreadModal(threadEncoded, qaPolEnc, qaNoteEnc, qaLdap) {
+        let raters = [];
+        try { raters = JSON.parse(decodeURIComponent(threadEncoded)); } catch(e){}
+        const qaPol = decodeURIComponent(qaPolEnc);
+        const qaNote = decodeURIComponent(qaNoteEnc);
+        const isQaUser = this.state.user.isQa;
+        
+        const view = document.getElementById('modal-body-view');
+        if(!view) return;
+
+        let html = '<div class="timeline">';
+        
+        raters.forEach((r, i) => {
+            let role = i === 0 ? 'Reporter (Agent 1)' : 'Analyst (Agent ' + (i+1) + ')';
+            let timeStr = new Date(r.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            let identitySpan = isQaUser ? '<span style="color:var(--text-main); font-weight:bold;">' + this.utils.escapeHtml(r.ldap) + '</span>' : '<span style="color:var(--text-muted); font-style:italic;">ID Hidden</span>';
+
+            html += '<div class="timeline-item"><div class="timeline-dot"></div><div class="timeline-content"><div style="font-size:12px; color:var(--text-muted); margin-bottom:6px; display:flex; justify-content:space-between;"><span><b>' + role + '</b> • ' + identitySpan + '</span><span>' + timeStr + '</span></div><div style="font-size:16px; font-weight:bold; color:var(--text-main); margin-bottom:6px;">' + this.utils.escapeHtml(r.policy) + '</div><div style="font-size:15px; color:var(--text-muted); font-style:italic; line-height:1.6;">"' + this.utils.formatRichText(r.comment) + '"</div></div></div>';
+        });
+
+        if (qaPol && qaPol !== "undefined" && qaPol.trim() !== "") {
+            const isSafe = qaPol.toLowerCase().includes('no violation') || qaPol.toLowerCase().includes('safe');
+            const qaColor = isSafe ? 'var(--success)' : 'var(--error)';
+            html += '<div class="timeline-item qa-response"><div class="timeline-dot"></div><div class="timeline-content"><div style="font-size:12px; color:var(--primary); margin-bottom:6px; display:flex; justify-content:space-between;"><span style="text-transform:uppercase; font-weight:bold;">QA OFFICIAL VERDICT</span><span>' + (isQaUser ? this.utils.escapeHtml(qaLdap) : 'ID Hidden') + '</span></div><div style="font-size:17px; font-weight:bold; color:' + qaColor + '; margin-bottom:10px;">' + this.utils.escapeHtml(qaPol) + '</div><div style="font-size:15px; color:var(--text-main); line-height:1.6;">"' + this.utils.formatRichText(qaNote) + '"</div></div></div></div>';
+        } else {
+            html += '<div class="timeline-item"><div class="timeline-dot" style="background:transparent; border: 2px dashed var(--text-muted);"></div><div class="timeline-content" style="background:transparent; border: 1px dashed var(--text-muted); text-align:center; padding: 25px;"><span style="font-size:15px; font-weight:600; text-transform:uppercase; letter-spacing:1px; color:var(--text-muted);">&#x23F3; QA Review in Progress...</span></div></div></div>';
+        }
+
+        view.innerHTML = html; 
+        this.utils.toggleModal('content-modal', true);
+    }
+
+    updateUiForRole() {
+        if(this.dom.userBadge) {
+            this.dom.userBadge.textContent = this.state.user.isQa ? 'QA ACCESS ♦ ' + this.state.user.ldap.toUpperCase() : 'AGENT ACCESS ♦ ' + this.state.user.ldap.toUpperCase();
+            this.dom.userBadge.style.color = this.state.user.isQa ? 'var(--primary)' : 'var(--text-muted)';
+        }
+        
+        if(this.dom.btnQaSettings) this.dom.btnQaSettings.style.display = this.state.user.isQa ? 'flex' : 'none';
+        if (this.dom.btnGrayAreaDb) this.dom.btnGrayAreaDb.style.display = this.state.user.isQa ? 'flex' : 'none';
+        
+        const tabHelpQa = document.getElementById('tab-help-qa');
+        if (tabHelpQa) tabHelpQa.style.display = this.state.user.isQa ? 'inline-block' : 'none';
+        
+        const showTimer = this.state.user.isQa || this.state.user.countdownVisibility;
+        const thTimer = document.getElementById('th-aht-timer');
+        if (thTimer) thTimer.style.display = showTimer ? 'table-cell' : 'none';
+    }
+
+    changePage(delta) {
+        const newPage = this.state.page + delta;
+        if (newPage > 0 && newPage <= this.state.totalPages) {
+            this._pausePolling();
+            this.state.isFetching = false;
+            this.fetchTableData(newPage, this.state.searchQuery, true);
+        }
+    }
+
+    openGrayAreaModal() {
+        if (!this.state.user.isQa) return;
+        this._pausePolling();
+        this.utils.showToast("Fetching Database...", "info");
+        
+        google.script.run.withSuccessHandler(data => {
+            this.state.grayAreaData = data || [];
+            const uniquePolicies = new Set();
+            this.state.grayAreaData.forEach(item => {
+                const policies = item.policy.split(',');
+                policies.forEach(p => { if(p.trim()) uniquePolicies.add(p.trim()); });
+            });
+            
+            if(this.dom.grayAreaPolicyFilter) {
+                this.dom.grayAreaPolicyFilter.innerHTML = '<option value="ALL">Filter by Policy (All)</option>';
+                Array.from(uniquePolicies).sort().forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p; opt.textContent = p;
+                    this.dom.grayAreaPolicyFilter.appendChild(opt);
+                });
+            }
+
+            this.renderGrayAreaTable('ALL');
+            this.utils.toggleModal('gray-area-modal', true);
+        }).withFailureHandler(e => { this.utils.onFailure(e); this.startPolling(); }).getGrayAreaDatabase();
+    }
+
+    renderGrayAreaTable(policyFilter) {
+        if(!this.dom.grayAreaTableBody) return;
+        this.dom.grayAreaTableBody.innerHTML = '';
+        let filteredData = this.state.grayAreaData;
+        
+        if (policyFilter !== 'ALL') { filteredData = this.state.grayAreaData.filter(item => item.policy.includes(policyFilter)); }
+        if (filteredData.length === 0) { 
+            if(this.dom.grayAreaEmptyState) this.dom.grayAreaEmptyState.style.display = 'block'; 
+            return; 
+        }
+        
+        if(this.dom.grayAreaEmptyState) this.dom.grayAreaEmptyState.style.display = 'none';
+        filteredData.forEach(item => {
+            const tr = document.createElement('tr');
+            
+            const cleanJob = String(item.jobId).replace(/^'/, "").trim();
+            const singleLineJob = cleanJob.replace(/\s+/g, ' ');
+            const escapedFullJobId = this.utils.escapeHtml(cleanJob);
+            const encodedFullJob = encodeURIComponent(cleanJob);
+            const escapedTruncatedJobId = this.utils.escapeHtml(this.utils.truncate(singleLineJob, 45));
+            
+            const driveMatch = singleLineJob.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
+            let previewHtml = '';
+            if(driveMatch && driveMatch[1]) {
+                const fileId = driveMatch[1];
+                previewHtml = '<div style="margin-top:8px;"><img src="https://drive.google.com/thumbnail?id=' + fileId + '&sz=w400" style="max-height:55px; border-radius:6px; border:1px solid var(--border-light); cursor:zoom-in; transition: transform 0.2s;" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" data-action="view-reference" data-fulltext="' + encodedFullJob + '" title="Click to expand full payload and image" draggable="false" /></div>';
+            }
+
+            const jobIdHtml = '<div class="job-id-cell"><span class="job-id-text" data-action="view-reference" data-fulltext="' + encodedFullJob + '" style="color:var(--warning); font-family:var(--font-mono); font-weight:bold; cursor:pointer; text-decoration:underline dashed rgba(251,191,36,0.5); text-underline-offset:4px; transition:color 0.2s;" onmouseover="this.style.color=\'var(--text-main)\'" onmouseout="this.style.color=\'var(--warning)\'" title="Click to view full reference">' + escapedTruncatedJobId + '</span><button class="btn-copy-inline" data-action="copy-jobid" data-jobid="' + escapedFullJobId + '" title="Copy Reference">Copy</button>' + previewHtml + '</div>';
+
+            tr.innerHTML = '<td style="font-family:var(--font-mono); font-size:12px; color:var(--text-muted);">' + this.utils.escapeHtml(item.date) + '</td><td>' + jobIdHtml + '</td><td style="font-weight:bold; color:var(--primary);">' + this.utils.escapeHtml(item.policy) + '</td><td style="font-size:13px;">' + this.utils.formatRichText(item.rationale) + '</td>';
+            this.dom.grayAreaTableBody.appendChild(tr);
+        });
+    }
+
+    renderPolicySettings(policiesGrouped) {
+        if (!this.dom.policiesContainer) return;
+        this.dom.policiesContainer.innerHTML = '';
+        if (!policiesGrouped || policiesGrouped.length === 0) {
+            this.addCategoryCard(); return;
+        }
+        
+        policiesGrouped.forEach(group => {
+            const card = this.addCategoryCard(group.category, group.isVisible !== false);
+            const mediaContainer = card.querySelector('.media-container');
+            
+            if (group.media && Array.isArray(group.media)) {
+                group.media.forEach(mediaGroup => {
+                     this.addMediaRow(mediaContainer, mediaGroup.type, mediaGroup.policies);
+                });
+            } else if (group.policies && Array.isArray(group.policies)) {
+                 this.addMediaRow(mediaContainer, "All", group.policies);
+            }
+            
+            if (mediaContainer.children.length === 0) {
+                 this.addMediaRow(mediaContainer, "All", []);
+            }
+        });
+    }
+
+    addCategoryCard(categoryName, isVisible) {
+        const safeName = categoryName || '';
+        const isVis = isVisible !== false; 
+        if (!this.dom.policiesContainer) return null;
+        
+        const card = document.createElement('div');
+        card.className = 'policy-category-card';
+        card.style.cssText = 'display:flex; flex-direction:column; padding:16px; background:var(--bg-deep); border:1px solid var(--border-solid); border-radius:8px; margin-bottom:12px; transition: opacity 0.2s;';
+        card.style.opacity = isVis ? '1' : '0.5'; 
+
+        card.innerHTML = 
+            '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px dashed var(--border-light); padding-bottom:10px; margin-bottom:10px;">' +
+                '<div style="display:flex; align-items:center; gap:10px; width:75%;">' +
+                   '<input type="text" class="cat-name" value="' + this.utils.escapeHtml(safeName) + '" placeholder="Subworkflow Category" style="font-size:15px; font-weight:bold; background:rgba(0,0,0,0.2); border:1px solid var(--border-light); color:var(--primary); outline:none; flex:1; padding:6px 10px; border-radius:4px;">' +
+                   '<button type="button" class="btn-toggle-vis" data-visible="' + isVis + '" style="background:transparent; border:none; cursor:pointer; font-size:18px; filter: grayscale(' + (isVis ? '0' : '100%') + ');" title="Toggle Agent Visibility">' + (isVis ? '&#x1F441;&#xFE0F;' : '&#x1F6AB;') + '</button>' +
+                '</div>' +
+                '<button type="button" class="btn-remove-cat" style="background:var(--error); border:none; color:#fff; border-radius:6px; cursor:pointer; width:34px; height:34px; font-weight:bold; font-size:14px;" title="Delete Subworkflow">X</button>' +
+            '</div>' +
+            '<div class="media-container" style="display:flex; flex-direction:column; gap:10px;"></div>' +
+            '<button type="button" class="btn-add-media" style="margin-top:12px; align-self:flex-start; background:rgba(16, 185, 129, 0.1); border:1px dashed var(--success); color:var(--success); padding:6px 12px; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">+ Add Media Type</button>';
+
+        card.querySelector('.btn-remove-cat').onclick = () => card.remove();
+        
+        const visBtn = card.querySelector('.btn-toggle-vis');
+        visBtn.onclick = function() {
+            let currentVis = this.getAttribute('data-visible') === 'true';
+            currentVis = !currentVis;
+            this.setAttribute('data-visible', currentVis);
+            this.innerHTML = currentVis ? '&#x1F441;&#xFE0F;' : '&#x1F6AB;';
+            this.style.filter = currentVis ? 'grayscale(0)' : 'grayscale(100%)';
+            card.style.opacity = currentVis ? '1' : '0.5';
+        };
+
+        const mediaContainer = card.querySelector('.media-container');
+        card.querySelector('.btn-add-media').onclick = () => this.addMediaRow(mediaContainer, "All", []);
+
+        this.dom.policiesContainer.appendChild(card);
+        this.dom.policiesContainer.scrollTop = this.dom.policiesContainer.scrollHeight;
+        
+        return card;
+    }
+
+    addMediaRow(container, mediaType, policies) {
+        const safeType = mediaType || 'All';
+        const safePolicies = policies || [];
+        if (!container) return;
+        
+        const row = document.createElement('div');
+        row.className = 'policy-media-row';
+        row.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:10px; background:var(--bg-hover); border:1px solid var(--border-light); border-radius:6px; margin-left:15px; border-left:3px solid var(--warning);';
+
+        let tagsHtml = '';
+        if (safePolicies.length > 0) {
+            safePolicies.forEach(p => {
+                tagsHtml += '<span class="kb-tag"><span>' + this.utils.escapeHtml(p) + '</span><span class="kb-tag-remove">×</span></span>';
+            });
+        }
+
+        const mediaOptions = ["All", "Text", "Image", "Video", "Audio"];
+        const selectHtml = mediaOptions.map(m => 
+            '<option value="' + m + '" ' + (m === safeType ? 'selected' : '') + '>' + m + '</option>'
+        ).join('');
+
+        row.innerHTML = 
+            '<div style="display:flex; gap:10px; align-items:center;">' +
+                '<select class="media-select" style="box-sizing: border-box; width: 140px; height: 36px; padding: 0 12px; font-size: 14px; line-height: 1.5; font-family: inherit; color: var(--text-main); background: var(--bg-deep); border: 1px solid var(--border-light); border-radius: 6px; outline: none; cursor: pointer;">' + selectHtml + '</select>' +
+                '<button type="button" class="btn-remove-media" style="background:transparent; border:none; color:var(--error); cursor:pointer; font-size:20px; margin-left:auto; line-height:1;" title="Remove Media Line">×</button>' +
+            '</div>' +
+            '<div class="kb-tags-wrapper" style="margin-top:4px;" onclick="this.querySelector(\'.policy-tag-input\').focus()">' +
+                tagsHtml + 
+                '<input type="text" class="policy-tag-input kb-tag-input" placeholder="Type policy & press Enter...">' +
+            '</div>';
+
+        row.querySelector('.btn-remove-media').onclick = () => row.remove();
+
+        const tagInput = row.querySelector('.policy-tag-input');
+        const wrapper = row.querySelector('.kb-tags-wrapper');
+
+        tagInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                const val = tagInput.value.trim().replace(/,/g, '');
+                if (val) {
+                    const tag = document.createElement('span');
+                    tag.className = 'kb-tag';
+                    tag.innerHTML = '<span>' + this.utils.escapeHtml(val) + '</span><span class="kb-tag-remove">×</span>';
+                    wrapper.insertBefore(tag, tagInput);
+                    tagInput.value = '';
+                }
+            } else if (e.key === 'Backspace' && tagInput.value === '') {
+                const tags = wrapper.querySelectorAll('.kb-tag');
+                if (tags.length > 0) { tags[tags.length - 1].remove(); }
+            }
+        });
+
+        wrapper.addEventListener('click', (e) => {
+            if (e.target.classList.contains('kb-tag-remove')) { e.target.parentElement.remove(); }
+        });
+
+        container.appendChild(row);
+    }
+
+    renderJixySettings(kbArray) {
+        if(!this.dom.jixyKbContainer) return;
+        this.dom.jixyKbContainer.innerHTML = '';
+        if (!kbArray || kbArray.length === 0) { this.addJixySettingsRow(); return; }
+        kbArray.forEach(item => this.addJixySettingsRow(item));
+    }
+
+    addJixySettingsRow(item = { title: '', url: '', keywords: [] }) {
+        if(!this.dom.jixyKbContainer) return;
+        const row = document.createElement('div');
+        row.className = 'jixy-kb-row'; row.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--bg-deep); border:1px solid var(--border-solid); border-radius:8px; position:relative;';
+        let tagsHtml = '';
+        if (item.keywords && item.keywords.length > 0) { item.keywords.forEach(kw => { tagsHtml += '<span class="kb-tag"><span>' + this.utils.escapeHtml(kw) + '</span><span class="kb-tag-remove">×</span></span>'; }); }
+        
+        row.innerHTML = '<div style="display:flex; gap:10px;"><input type="text" class="kb-title" placeholder="Document Title" value="' + this.utils.escapeHtml(item.title) + '" style="flex:1; font-size:14px; height:36px;"><input type="text" class="kb-url" placeholder="Resource URL (https://...)" value="' + this.utils.escapeHtml(item.url) + '" style="flex:2; font-size:14px; height:36px;"><button type="button" class="btn-remove-kb" style="background:var(--error); border:none; color:#fff; border-radius:6px; cursor:pointer; padding:0 12px; height:36px; font-weight:bold;" title="Remove Row">X</button></div><div class="kb-tags-wrapper" onclick="this.querySelector(\'.kb-tag-input\').focus()">' + tagsHtml + '<input type="text" class="kb-tag-input" placeholder="Type keyword & press Enter..."></div>';
+        row.querySelector('.btn-remove-kb').onclick = () => row.remove();
+        
+        const tagInput = row.querySelector('.kb-tag-input'); const wrapper = row.querySelector('.kb-tags-wrapper');
+        tagInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault(); const val = tagInput.value.trim().replace(/,/g, '').toLowerCase();
+                if (val) { const tag = document.createElement('span'); tag.className = 'kb-tag'; tag.innerHTML = '<span>' + this.utils.escapeHtml(val) + '</span><span class="kb-tag-remove">×</span>'; wrapper.insertBefore(tag, tagInput); tagInput.value = ''; }
+            } else if (e.key === 'Backspace' && tagInput.value === '') { const tags = wrapper.querySelectorAll('.kb-tag'); if (tags.length > 0) { tags[tags.length - 1].remove(); } }
+        });
+        
+        wrapper.addEventListener('click', (e) => { if (e.target.classList.contains('kb-tag-remove')) { e.target.parentElement.remove(); } });
+        this.dom.jixyKbContainer.appendChild(row); this.dom.jixyKbContainer.scrollTop = this.dom.jixyKbContainer.scrollHeight;
+    }
+
+    saveSettings() {
+        const btn = document.getElementById('settings-save-btn');
+        if(!btn) return;
+        const origText = btn.innerHTML;
+        btn.disabled = true; btn.innerHTML = 'SAVING...';
+        this._pausePolling();
+        
+        const kbRows = this.dom.jixyKbContainer.querySelectorAll('.jixy-kb-row'); const updatedKB = [];
+        kbRows.forEach(row => {
+            const t = row.querySelector('.kb-title').value.trim(); const u = row.querySelector('.kb-url').value.trim();
+            const kwArray = Array.from(row.querySelectorAll('.kb-tag > span:first-child')).map(span => span.textContent.trim().toLowerCase());
+            if (t && u) { updatedKB.push({ title: t, url: u, keywords: kwArray }); }
+        });
+
+        const policyCardsDOM = document.getElementById('settings-policies-container').querySelectorAll('.policy-category-card');
+        const grouped = {};
+        const visibilityMap = {};
+        
+        policyCardsDOM.forEach(card => {
+            const catName = card.querySelector('.cat-name').value.trim() || 'General';
+            const isVis = card.querySelector('.btn-toggle-vis').getAttribute('data-visible') === 'true';
+            
+            visibilityMap[catName] = isVis;
+
+            if (!grouped[catName]) grouped[catName] = {};
+
+            const mediaRows = card.querySelectorAll('.policy-media-row');
+            
+            mediaRows.forEach(row => {
+                const medType = row.querySelector('.media-select').value || 'All';
+                const polArray = Array.from(row.querySelectorAll('.kb-tag > span:first-child')).map(span => span.textContent.trim());
+
+                if (polArray.length > 0) {
+                    if (!grouped[catName][medType]) grouped[catName][medType] = [];
+                    for(let i=0; i<polArray.length; i++){
+                       grouped[catName][medType].push(polArray[i]);
+                    }
+                }
+            });
+        });
+
+        const updatedPolicies = Object.keys(grouped).map(cat => {
+            return {
+                category: cat,
+                isVisible: visibilityMap[cat],
+                media: Object.keys(grouped[cat]).map(med => {
+                    const uniquePol = [];
+                    const tempSet = new Set();
+                    grouped[cat][med].forEach(p => {
+                        if (!tempSet.has(p)) { tempSet.add(p); uniquePol.push(p); }
+                    });
+                    return { type: med, policies: uniquePol };
+                })
+            };
+        });
+
+        const data = { 
+            qaEmails: document.getElementById('settings-emails') ? document.getElementById('settings-emails').value : '', 
+            policies: updatedPolicies, 
+            countdownDuration: document.getElementById('settings-cd-duration') ? document.getElementById('settings-cd-duration').value : 3, 
+            countdownVisibility: document.getElementById('settings-cd-visibility') ? document.getElementById('settings-cd-visibility').checked : true, 
+            jixyKB: updatedKB 
+        };
+        
+        google.script.run.withSuccessHandler(res => {
+            btn.disabled = false; btn.innerHTML = origText;
+            this.utils.toggleModal('settings-modal', false); this.utils.showToast("Settings & Knowledge Base Saved", "success");
+            this.state.user.jixyKB = updatedKB; 
+            this.state.isFetching = false;
+            this.fetchTableData(1, "", true);
+        }).withFailureHandler(e => { btn.disabled = false; btn.innerHTML = origText; this.utils.onFailure(e); }).saveAdminSettings(data);
+    }
+
+    _initJixyEyeTracking() {
+        document.addEventListener('mousemove', (event) => {
+            const moveX = ((event.clientX / window.innerWidth) - 0.5) * 4;
+            const moveY = ((event.clientY / window.innerHeight) - 0.5) * 4;
+            document.querySelectorAll('.ai-pupil').forEach(p => p.style.transform = 'translate(' + moveX + 'px, ' + moveY + 'px)');
+        });
+    }
+
+    playNotificationSound() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            
+            if (ctx.state === 'suspended') {
+                ctx.resume();
+            }
+
+            const osc = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+            
+            gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5);
+            
+            osc.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+        } catch(e) {
+            console.warn("Audio synthesizer blocked by browser:", e);
+        }
+    }
+
+    checkJixyAlerts(data) {
+        if (!data || data.length === 0) return;
+        
+        if (this.state.lastQaAlertTime === null) {
+            let maxQa = 0;
+            let maxAgent = 0;
+            data.forEach(r => {
+                const t = new Date(r.timestamp).getTime();
+                if(t > maxQa) maxQa = t;
+                if(r.status.startsWith('RESOLVED|')) {
+                    const resT = parseInt(r.status.split('|')[1], 10);
+                    if(resT > maxAgent) maxAgent = resT;
+                }
+            });
+            this.state.lastQaAlertTime = maxQa || Date.now();
+            this.state.lastAgentAlertTime = maxAgent || Date.now();
+            return; 
+        }
+
+        let newQaTime = this.state.lastQaAlertTime; 
+        let newAgentTime = this.state.lastAgentAlertTime;
+        let newQaTickets = []; 
+        let newAgentTickets = [];
+        
+        data.forEach(row => {
+            if (this.state.user.isQa && row.status === 'PENDING_QA') {
+                const ticketTime = new Date(row.timestamp).getTime();
+                if (ticketTime > this.state.lastQaAlertTime) { 
+                    newQaTickets.push({ jobId: row.jobId, time: ticketTime }); 
+                    if (ticketTime > newQaTime) newQaTime = ticketTime; 
+                }
+            }
+            if (!this.state.user.isQa && row.status.startsWith('RESOLVED')) {
+                const resTime = parseInt(row.status.split('|')[1], 10); 
+                let raters = []; try { raters = JSON.parse(row.raters); } catch(e){}
+                if (raters.some(r => r.ldap === this.state.user.ldap)) {
+                    if (resTime > this.state.lastAgentAlertTime) { 
+                        newAgentTickets.push({ jobId: row.jobId, time: resTime }); 
+                        if (resTime > newAgentTime) newAgentTime = resTime; 
+                    }
+                 }
+            }
+        });
+        
+        if (newQaTickets.length > 0) { 
+            this.state.lastQaAlertTime = newQaTime; 
+            localStorage.setItem('flash-assistant-qa-time', newQaTime.toString()); 
+            this.triggerJixySecretary({ type: 'qa_alert', tickets: newQaTickets }); 
+        }
+        if (newAgentTickets.length > 0) { 
+            this.state.lastAgentAlertTime = newAgentTime; 
+            localStorage.setItem('flash-assistant-agent-time', newAgentTime.toString()); 
+            this.triggerJixySecretary({ type: 'agent_alert', tickets: newAgentTickets }); 
+        }
+    }
+
+    triggerJixySecretary(reminders) {
+        if(!this.dom.aiChatWindow || !this.dom.aiInput || !this.dom.aiToggleBtn) return;
+        
+        this.playNotificationSound();
+
+        this.dom.aiChatWindow.classList.remove('ai-hidden');
+        this.dom.aiInput.focus(); this.dom.aiToggleBtn.style.transform = 'scale(0.9)'; this.dom.aiToggleBtn.style.animationPlayState = 'paused'; this.state.jixyGreeted = true; 
+        let msg = "";
+        
+        if (reminders.type === 'qa_alert') {
+            msg = 'Alert! &#x1F4E2;<br><br><b>' + reminders.tickets.length + ' new ticket(s)</b> have been escalated:<br><br>';
+            reminders.tickets.forEach(t => {
+                let timeStr = new Date(t.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                let cleanJobId = this.utils.escapeHtml(t.jobId.split('\n\n---')[0].trim());
+                msg += '<div style="margin-bottom:8px; padding:8px; background:rgba(255,255,255,0.05); border:1px solid var(--border-light); border-radius:6px; font-size:13px; word-break: break-all;"><b>Job ID:</b> ' + cleanJobId + '<br><span style="color:var(--text-muted); font-size:11px;">&#x23F0; Inserted at ' + timeStr + '</span><br><a href="#" onclick="event.preventDefault(); window.searchFromJixy(\'' + cleanJobId + '\')" style="color:var(--primary); text-decoration:none; font-weight:bold; display:inline-block; margin-top:6px;">&#x1F50D; Click here to view</a></div>';
+            });
+        } else if (reminders.type === 'agent_alert') {
+            msg = 'Update! &#x2705;<br><br>The QA just resolved your ticket(s):<br><br>';
+            reminders.tickets.forEach(t => {
+                let timeStr = new Date(t.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                let cleanJobId = this.utils.escapeHtml(t.jobId.split('\n\n---')[0].trim());
+                msg += '<div style="margin-bottom:8px; padding:8px; background:rgba(255,255,255,0.05); border:1px solid var(--border-light); border-radius:6px; font-size:13px; word-break: break-all;"><b>Job ID:</b> ' + cleanJobId + '<br><span style="color:var(--text-muted); font-size:11px;">&#x23F0; Resolved at ' + timeStr + '</span><br><a href="#" onclick="event.preventDefault(); window.searchFromJixy(\'' + cleanJobId + '\')" style="color:var(--success); text-decoration:none; font-weight:bold; display:inline-block; margin-top:6px;">&#x1F50D; Click here to view</a></div>';
+            });
+        }
+        
+        const typingHtml = '<div class="ai-typing-indicator"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>';
+        const loadId = this.addMessage(typingHtml, 'bot', true);
+        setTimeout(() => { this.removeMessage(loadId); this.handleAiResponse({ type: 'chat', message: msg }); }, 1000);
+    }
+    
+    triggerSearchFromJixy(jobId) { 
+        if (this.dom.searchInput) { this.dom.searchInput.value = jobId; } 
+        this.state.searchQuery = jobId; 
+        this._pausePolling();
+        this.state.isFetching = false;
+        this.fetchTableData(1, jobId, true, true); 
+    }
+
+    toggleAI() {
+        if(!this.dom.aiChatWindow || !this.dom.aiToggleBtn) return;
+        this.dom.aiChatWindow.classList.toggle('ai-hidden');
+        if (!this.dom.aiChatWindow.classList.contains('ai-hidden')) { 
+            if(this.dom.aiInput) this.dom.aiInput.focus(); 
+            this.dom.aiToggleBtn.style.transform = 'scale(0.9)';
+            this.dom.aiToggleBtn.style.animationPlayState = 'paused'; 
+            if (!this.state.jixyGreeted) {
+                this.state.jixyGreeted = true;
+                const typingHtml = '<div class="ai-typing-indicator"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>'; const loadId = this.addMessage(typingHtml, 'bot', true);
+                setTimeout(() => { this.removeMessage(loadId); const greeting = { type: 'chat', message: "Hi! I am Jixy, your Knowledge Base Assistant. &#x1F916;<br><br>My purpose is to help you instantly find official policies. Just type a keyword like <b>'Harassment'</b> or <b>'DC'</b>!" }; this.handleAiResponse(greeting); }, 600);
+            }
+        } else { this.dom.aiToggleBtn.style.transform = 'scale(1)'; this.dom.aiToggleBtn.style.animationPlayState = 'running'; }
+    }
+
+    handleAiEnter(e) { if (e.key === 'Enter') this.sendAiMessage(); }
+    sendQuickAiMessage(text) { if(this.dom.aiInput) this.dom.aiInput.value = text; this.sendAiMessage(); if(this.dom.aiQuickChips) this.dom.aiQuickChips.style.display = 'none'; }
+    
+    sendAiMessage() {
+        if(!this.dom.aiInput) return;
+        const text = this.dom.aiInput.value.trim();
+        if (!text) return;
+        
+        this.addMessage(this.utils.escapeHtml(text), 'user'); 
+        this.dom.aiInput.value = '';
+        
+        const typingHtml = '<div class="ai-typing-indicator"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div>';
+        const loadId = this.addMessage(typingHtml, 'bot', true);
+        setTimeout(() => { this.removeMessage(loadId); this.handleAiResponse(this.processAILogic(text)); }, 600);
+    }
+    
+    processAILogic(query) {
+        if (window.JixyFAQEngine) {
+            const genericMatch = window.JixyFAQEngine.getGenericResponse(query);
+            if (genericMatch) {
+                return genericMatch;
+            }
+        }
+
+        const q = query.toLowerCase().trim();
+        const stopWords = ['the','find','search','open','and','or','e','o','cerca','trova','apri','give','me','show','for','di','per','please','link','a','to','url'];
+        
+        const rawTokens = q.replace(/[^a-z0-9\s]/g, '').split(/\s+/);
+        let searchTokens = rawTokens.filter(w => w.length > 1 && !stopWords.includes(w));
+        
+        if (searchTokens.length === 0) { 
+            searchTokens = rawTokens.filter(w => w.length > 1);
+            if (searchTokens.length === 0) {
+                return { type: 'chat', message: "Can you be specific? Type a keyword." };
+            }
+        }
+        
+        const kb = this.state.user.jixyKB || []; 
+        if (kb.length === 0) {
+            return { type: 'chat', message: "My Knowledge Base is currently empty." };
+        }
+        
+        const scoredDocs = kb.map(doc => { 
+            let score = 0; 
+            let matchCount = 0; 
+            const docText = (doc.title + ' ' + (doc.keywords||[]).join(' ') + ' ' + doc.url).toLowerCase();
+            
+            searchTokens.forEach(t => { 
+                if (docText.includes(t)) { 
+                    score += 10; 
+                    matchCount++; 
+                    if ((doc.keywords||[]).some(kw => kw === t || kw.includes(t))) score += 40; 
+                } 
+            }); 
+            
+            if ((doc.keywords||[]).some(kw => q.includes(kw))) { 
+                score += 100; 
+                matchCount++; 
+            }
+            return { title: doc.title, url: doc.url, score: score, matchCount: matchCount }; 
+        });
+        
+        let filteredDocs = scoredDocs.filter(d => d.matchCount > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+        
+        if (filteredDocs.length > 0 && ['apri', 'open', 'launch', 'abre'].some(k => q.includes(k))) { 
+            return { 
+                type: 'action', 
+                action: 'open_url', 
+                url: filteredDocs[0].url, 
+                message: 'Opening <b>' + this.utils.escapeHtml(filteredDocs[0].title) + '</b>...' 
+            }; 
+        }
+        
+        if (filteredDocs.length > 0) {
+            return { type: 'results', data: filteredDocs, message: "Here is what I found for you:" };
+        }
+        
+        return { type: 'chat', message: "Sorry, I couldn't find anything matching <b>'" + searchTokens.join(', ') + "'</b> in my database." };
+    }
+
+    handleAiResponse(res) {
+        if (res.type === 'action' && res.action === 'open_url') { this.addMessage(res.message, 'bot'); setTimeout(() => window.open(res.url, '_blank'), 1000); } 
+        else if (res.type === 'results') {
+            this.addMessage(res.message, 'bot');
+            if(this.dom.aiMessages) {
+                res.data.forEach(item => { 
+                    const div = document.createElement('div'); div.className = 'result-card-ai'; 
+                    div.innerHTML = '<span class="res-title">&#x1F517; ' + this.utils.escapeHtml(item.title) + '</span>'; 
+                    div.onclick = () => window.open(item.url, '_blank'); this.dom.aiMessages.appendChild(div); 
+                });
+            }
+            this.scrollToBottom();
+        } else { this.addMessage(res.message, 'bot'); }
+    }
+    
+    addMessage(t, s, tmp = false) { 
+        if(!this.dom.aiMessages) return;
+        const div = document.createElement('div'); div.className = 'msg msg-' + s; div.innerHTML = t; if (tmp) div.id = 'ai-temp-' + Date.now(); this.dom.aiMessages.appendChild(div); this.scrollToBottom(); return div.id; 
+    }
+    
+    removeMessage(id) { const el = document.getElementById(id); if (el) el.remove(); }
+    
+    scrollToBottom() { if(this.dom.aiMessages) setTimeout(() => this.dom.aiMessages.scrollTop = this.dom.aiMessages.scrollHeight, 50); }
+
+    // ------------------------------------------------------------------------
+    // JIXY FEEDBACK ENGINE - PASTE INTERCEPTOR & DATA DISPATCH
+    // ------------------------------------------------------------------------
+    handleFeedbackPaste(e, targetInput) {
+        const items = (e.clipboardData || window.clipboardData).items;
+        let imageItem = null;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image/') === 0) {
+                imageItem = items[i];
+                break;
+            }
+        }
+        if (imageItem) {
+            e.preventDefault(); 
+            const file = imageItem.getAsFile();
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                this.state.jixyFeedbackImage = {
+                    base64: event.target.result,
+                    mimeType: file.type || 'image/png',
+                    fileName: "Jixy_Lens_" + Date.now() + ".png"
+                };
+                targetInput.value = "📸 Screenshot captured! Ready to submit.";
+                targetInput.style.color = "var(--success)";
+                targetInput.style.fontWeight = "bold";
+                targetInput.readOnly = true;
+                this.utils.showToast("Screenshot loaded into memory.", "success");
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    submitJixyFeedback() {
+        const issueInput = document.getElementById('jixy-fb-issue');
+        const solutionInput = document.getElementById('jixy-fb-solution');
+        const screenshotInput = document.getElementById('jixy-fb-screenshot');
+        const btnSubmit = document.getElementById('jixy-fb-submit');
+
+        if (!issueInput || !btnSubmit) return;
+
+        const issue = issueInput.value.trim();
+        const solution = solutionInput ? solutionInput.value.trim() : '';
+
+        if (!issue) {
+            this.utils.showToast("Please describe the issue or suggestion.", "warning");
+            return;
+        }
+
+        const origText = btnSubmit.innerHTML;
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = 'TRANSMITTING...';
+
+        const payload = {
+            issue: issue,
+            solution: solution,
+            ldap: this.state.user.ldap,
+            imageBase64: this.state.jixyFeedbackImage ? this.state.jixyFeedbackImage.base64 : null,
+            mimeType: this.state.jixyFeedbackImage ? this.state.jixyFeedbackImage.mimeType : null,
+            fileName: this.state.jixyFeedbackImage ? this.state.jixyFeedbackImage.fileName : null
+        };
+
+        google.script.run.withSuccessHandler(res => {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = origText;
+            if (res.success) {
+                this.utils.showToast("Feedback sent directly to dev team!", "success");
+                issueInput.value = '';
+                if(solutionInput) solutionInput.value = '';
+                if(screenshotInput) {
+                    screenshotInput.value = '';
+                    screenshotInput.readOnly = false;
+                    screenshotInput.style.color = '';
+                    screenshotInput.style.fontWeight = '';
+                }
+                this.state.jixyFeedbackImage = null;
+                this.addMessage("Thank you! Your feedback has been safely transmitted to my creator's matrix. 🛠️", 'bot');
+            } else {
+                this.utils.showToast(res.message, "error");
+            }
+        }).withFailureHandler(e => {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = origText;
+            this.utils.onFailure(e);
+        }).saveJixyFeedback(payload);
+    }
+  }
+
+  const app = new AppManager();
+  window.app = app;
+  
+  window.toggleAI = () => app.toggleAI();
+  window.handleAiEnter = (e) => app.handleAiEnter(e);
+  window.sendAiMessage = () => app.sendAiMessage();
+  window.sendQuickAiMessage = (txt) => app.sendQuickAiMessage(txt);
+  window.searchFromJixy = (jobId) => app.triggerSearchFromJixy(jobId);
+  
+  window.switchSettingsFolder = (folderId) => {
+      const modal = document.getElementById('settings-modal'); if(!modal) return;
+      modal.querySelectorAll('.tab-folder').forEach(tab => tab.classList.remove('active'));
+      modal.querySelectorAll('.settings-tab-content').forEach(content => content.classList.remove('active'));
+      const event = window.event; if (event && event.currentTarget) { event.currentTarget.classList.add('active'); }
+      const target = document.getElementById(folderId); if (target) { target.classList.add('active'); }
+  };
+  
+  window.switchHelpFolder = (folderId) => {
+      const modal = document.getElementById('help-modal'); if(!modal) return;
+      modal.querySelectorAll('.tab-folder').forEach(tab => tab.classList.remove('active'));
+      modal.querySelectorAll('.settings-tab-content').forEach(content => content.classList.remove('active'));
+      const event = window.event; if (event && event.currentTarget) { event.currentTarget.classList.add('active'); }
+      const target = document.getElementById(folderId); if (target) { target.classList.add('active'); }
+  };
+  
+  document.addEventListener('DOMContentLoaded', function() { app.init(); });
+  
+  window.copyTextToClipboard = function(text, btn) {
+    if (!text) return;
+    navigator.clipboard.writeText(text).then(function() {
+      if (window.showCopyFeedback) window.showCopyFeedback(btn);
+    }).catch(function(err) {
+      console.error('Failed to copy text: ', err);
+    });
+  };
+
+  window.showCopyFeedback = function(btn) {
+    if (!btn) return;
+    const originalHTML = btn.innerHTML;
+    btn.classList.add('copied');
+    if (btn.innerText.includes('Copy')) {
+      btn.innerHTML = '&#x2714;&#xFE0F; Copied!';
+    } else {
+      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+    }
+    setTimeout(function() {
+      btn.classList.remove('copied');
+      btn.innerHTML = originalHTML;
+    }, 1500);
+  };
+</script>

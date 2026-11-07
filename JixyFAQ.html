@@ -1,0 +1,184 @@
+<!-- File: JixyFAQ.html -->
+<script>
+/**
+* JIXY AI FAQ ENGINE & CORE INTENT MODULE (EXTENDED ENTERPRISE EDITION V2)
+* Project: Flash Assistant (O18) UNIFIED UPGRADE
+* Author / Creator: Vito Labarile (QA Specialist)
+* Description: Standalone NLP module handling massive arrays of existential, operational, technical, and platform queries via Broad Regex.
+* Patch: Strict String Concatenation + Textarea Paste for Jixy Lens.
+*/
+window.JixyFAQEngine = {
+getGenericResponse: function(query) {
+const q = query.toLowerCase().trim();
+
+// 1. IDENTITY, CREATOR & ORIGIN INTENT
+const creatorKeywords = /(who.*made|who.*created|creator|developer|who.*programmed|who.*coded|vito|labarile|who.*built|where.*come from|who.*maker|inventor|who.*designed|who.*dad|who.*father|who.*owns)/i;
+if (creatorKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'I was exclusively engineered and developed by <b>Vito Labarile</b>, an enterprise Quality Assurance (QA) specialist.<br><br>' +
+'He architected my entire framework from the ground up: from my algorithmic keyword-scoring system and client-side XSS protections, to the highly optimized O(1) database pagination that keeps this platform lightning fast. His goal was to empower agents and maximize process accuracy across the team! 👑'
+};
+}
+
+// 2. EXISTENTIAL & AI NATURE
+const existentialKeywords = /(are you alive|are you real|are you human|bot|robot|artificial intelligence|are you ai|feelings|can you think|sentient|what are you exactly|sleep|conscious|do you eat|do you breathe|are you a person|machine|have a brain|can you feel|emotions)/i;
+if (existentialKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'I am not a human, and I am not biologically alive. I am <b>Jixy</b>, a highly specialized, reactive Artificial Intelligence and NLP (Natural Language Processing) script.<br><br>' +
+'I don\'t have feelings, sleep, or drink coffee ☕. Instead, I exist as a network of algorithms running on Google\'s V8 Engine, fully dedicated to parsing policies, assisting workflow agents, and serving my creator\'s vision of a flawless QA workflow! 🤖'
+};
+}
+
+// 3. GREETINGS & SMALL TALK
+const greetingKeywords = /^(hi|hello|hey|yo|greetings|good morning|good afternoon|good evening|how are you|how's it going|what's up|how are you doing|how do you do|sup|hiya|good day)/i;
+if (greetingKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'Hello there! I am functioning at 100% capacity, fully powered by cloud servers and optimized for instant policy retrieval! 🦾<br><br>' +
+'I am currently monitoring the live environment. How can I assist you with your compliance tasks today? You can type a direct keyword (e.g., <i>\'Harassment\'</i>, <i>\'Violence\'</i>) or ask me details about how this platform works.'
+};
+}
+
+const jokeKeywords = /(tell.*joke|make.*laugh|say.*funny|know.*jokes|entertain me)/i;
+if (jokeKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'Why did the QA engineer cross the road?<br><br>To log a Gray Area ticket on the other side! 🥁<br><i>...Okay, I\'ll stick to retrieving policies.</i>'
+};
+}
+
+// 4. OPERATIONAL LOGIC & NLP ALGORITHM
+const logicKeywords = /(how.*function|how.*work|what.*function|system logic|how.*search|what.*algorithm|how.*find|explain.*brain|what.*do you do|what.*purpose|why.*here|what.*job|what.*capabilities|how.*help me)/i;
+if (logicKeywords.test(q)) {
+return {
+type: 'chat',
+message: '<b>Jixy Brain Engine - NLP Architecture:</b><br><br>' +
+'1. <b>Text Tokenization:</b> When you submit a prompt, I sanitize it (blocking XSS attacks) and split it into an array of alphanumeric tokens.<br><br>' +
+'2. <b>Stop-Words Pruning:</b> I execute an optimization loop stripping away non-essential connector terms (like <i>\'the\', \'find\', \'open\'</i>) to isolate purely critical policy definitions.<br><br>' +
+'3. <b>Algorithmic Scoring Matrix:</b> I scan the active Knowledge Base initialized by QA staff. I match tokens using a priority weight system:' +
+'<ul style="padding-left:20px; margin-top:5px; margin-bottom:5px; line-height:1.5;">' +
+'<li><b>Base Hit:</b> Title/URL containment yields <b>+10 points</b>.</li>' +
+'<li><b>Tag Match:</b> Exact keyword tag matches grant a <b>+40 points</b> bonus.</li>' +
+'<li><b>Strict Intent:</b> If your entire query contains a tag phrase, a premium weight of <b>+100 points</b> is assigned.</li>' +
+'</ul>' +
+'4. <b>Ranked Aggregation:</b> I sort the data and render the Top 3 highest-relevance asset cards.<br><br>' +
+'5. <b>Automated Breakout:</b> If I detect triggers like <i>\'open\'</i> or <i>\'launch\'</i>, I bypass the chat UI and securely open the official document for you instantly.'
+};
+}
+
+// 5. PLATFORM FAQ
+const platformKeywords = /(what is flash assistant|purpose of this app|why.*use this|what.*platform|what.*app|flash assistant|o18|what.*tool|point of this|what.*application do)/i;
+if (platformKeywords.test(q) && !q.includes("work") && !q.includes("function")) {
+return {
+type: 'chat',
+message: '<b>Flash Assistant</b> is a custom, unified, single-queue Quality Assurance hub designed for high-throughput enterprise workflows.<br><br>' +
+'It replaces chaotic, scattered spreadsheets and messy instant messaging rooms. It creates a direct, atomic, and synchronized communication loop between front-line Agents and the QA engineering staff for complex policy doubts, preventing data-loss and ensuring maximum transparency.'
+};
+}
+
+// 6. UNIFIED QUEUE & POLLING
+const queueKeywords = /(how.*queue|queue logic|unified queue|live sync|what is polling|why 4 seconds|real time|auto refresh|how.*tickets update|why.*refresh|how fast.*queue|polling interval|refresh rate)/i;
+if (queueKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'The <b>Unified Queue</b> operates on a highly optimized live-syncing architecture.<br><br>' +
+'When an Agent logs a policy doubt, the ticket enters a <i>\'PENDING_QA\'</i> state. The queue utilizes an asynchronous <b>Long-Polling</b> routine that requests incremental database updates every <b>4 seconds</b>. This means you will see new tickets, timer updates, and QA resolutions appear in real-time, without ever needing to refresh your browser page.'
+};
+}
+
+// 7. GRAY AREAS
+const grayAreaKeywords = /(gray area|grey area|edge case|permanent database|save.*forever|what is a grey area|when.*gray area|why mark as gray area|gray_area|grey_area)/i;
+if (grayAreaKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'A <b>Gray Area</b> represents a highly complex policy edge-case that falls outside traditional, rigid documentation guidelines.<br><br>' +
+'When a QA engineer resolves a ticket and toggles <i>\'Mark as Gray Area\'</i>, the system duplicates the record into a dedicated, permanent database sheet. This immunizes the record from the standard 30-day automated system pruning, saving it forever as a benchmark for future legal, policy, or training references.'
+};
+}
+
+// 8. BLIND THREADING
+const blindKeywords = /(blind thread|blind analysis|why can'?t i see|hidden comment|neutrality|why.*hidden|second agent|multiple agents|can'?t read comments|blind ticket|duplicate ticket)/i;
+if (blindKeywords.test(q)) {
+return {
+type: 'chat',
+message: '<b>Blind Threading</b> is a feature designed by Vito Labarile to ensure total analytical neutrality.<br><br>' +
+'If you escalate a Job ID that has already been submitted by another agent, the system intersects you into a "Blind Thread". You can submit your own analysis, but all rationale notes remain completely hidden from everyone until the QA staff issues the official verdict. This prevents "group-think" and cognitive bias during policy evaluation.'
+};
+}
+
+// 9. ROW LOCKS
+const lockKeywords = /(locked|row lock|lock badge|why.*locked|race condition|qa concurrency|3 minutes lock|who locked|can'?t edit|can'?t resolve|unlock)/i;
+if (lockKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'To prevent <b>Data Race Conditions</b> (where two QA engineers inadvertently audit the exact same ticket simultaneously), the platform implements a distributed lock via the Cache Engine.<br><br>' +
+'When a QA clicks \'Resolve\', the system assigns them a strict <b>3-minute lock</b> on that row. Other QA users will see a red lock badge and are blocked from modifying it. If the QA abandons the screen, the lock expires automatically after 3 minutes, releasing the ticket back to the team.'
+};
+}
+
+// 10. AHT & TIMERS
+const ahtKeywords = /(aht|timer|countdown|sla|expired|time limit|how much time|why.*timer|what happens.*expires|time is up|clock)/i;
+if (ahtKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'The <b>AHT (Average Handling Time) Limit</b> is a live countdown rendered next to pending escalations in the queue.<br><br>' +
+'It calculates the exact remaining window (usually 3 minutes) allocated for a QA to resolve the case. If the timer hits zero, it flashes \'EXPIRED\'. The QA administration panel can dynamically adjust this duration or hide it from agents in real-time.'
+};
+}
+
+// 11. OFFLINE VAULT
+const offlineKeywords = /(offline|disconnected|no internet|syncing offline|wifi drop|offline vault|local storage|lost connection|no connection|can'?t connect|sync error|red badge)/i;
+if (offlineKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'Flash Assistant features a resilient <b>Offline Data Vault</b>.<br><br>' +
+'If your corporate network connection drops, the app intercepts your ticket submissions, safely defers them into your browser\'s local sandbox (<code>localStorage</code>), and displays a red \'Offline Sync\' badge.<br><br>' +
+'You can keep working. As soon as a stable internet ping is restored, the queue wakes up and automatically pipes all your offline tickets back to the main database one by one.'
+};
+}
+
+// 12. BATCH PRUNING
+const maintenanceKeywords = /(maintenance|deletion|system trigger|ttl|pruning|where are old tickets|do tickets get deleted|database cleanup|30 days|retention|how long.*kept|missing tickets|disappeared)/i;
+if (maintenanceKeywords.test(q)) {
+return {
+type: 'chat',
+message: 'To prevent data bloat and ensure Google Sheets operates within optimal memory limits, a server-side background trigger executes an <b>Automated Batch Pruning Routine</b>.<br><br>' +
+'Every 5 minutes, it evaluates the main log in O(1) time complexity. Any ticket that has been marked \'RESOLVED\' for more than <b>30 days (TTL)</b> is permanently purged from the active queue. Only tickets marked as \'Gray Area\' survive this deletion.'
+};
+}
+
+// 13. ESCALATION
+const howtoKeywords = /(how to escalate|how to submit|how do i use|how to send|what do i put in|how to write context|how do i log|escalation process|steps to escalate|how to add analysis)/i;
+if (howtoKeywords.test(q)) {
+return {
+type: 'chat',
+message: '<b>How to escalate a ticket to QA:</b><br><br>' +
+'1. Copy the exact <b>Job ID</b> from your tool and paste it into the identification input field.<br>' +
+'2. Click the \'Policy Hypothesis\' dropdown and select what you suspect the violation is.<br>' +
+'3. In the <b>Rationale</b> box, write at least 15 characters explaining *why* you are in doubt. Context is mandatory to help QA investigate efficiently.<br>' +
+'4. Click <b>ESCALATE TO QA</b>.<br><br>' +
+'Your ticket will instantly appear in the live queue below as \'Pending QA\' (Yellow dot).'
+};
+}
+
+// 14. JIXY LENS FEEDBACK
+const feedbackKeywords = /(feedback|report.*bug|found.*bug|issue|not working|suggestion|improvement|idea|broken|error|glitch)/i;
+if (feedbackKeywords.test(q)) {
+return {
+type: 'chat',
+message: '<b>Developer Feedback & Bug Report</b> 🛠️<br>Thank you for helping improve the platform! Please fill out the details below. This will be sent directly to the development matrix.<br><br>' +
+'<div style="display:flex; flex-direction:column; gap:8px; padding:10px; background:rgba(0,0,0,0.2); border:1px solid var(--border-light); border-radius:8px;">' +
+'<input type="text" id="jixy-fb-issue" class="modern-input" placeholder="What is not working? (Bug/Issue)" style="font-size:13px; padding:8px; width:100%; box-sizing:border-box;">' +
+'<input type="text" id="jixy-fb-solution" class="modern-input" placeholder="Suggested solution or idea..." style="font-size:13px; padding:8px; width:100%; box-sizing:border-box;">' +
+'<textarea id="jixy-fb-screenshot" class="modern-input" placeholder="Paste screenshot here (Jixy Lens)..." style="font-size:13px; padding:8px; width:100%; box-sizing:border-box; resize:vertical; min-height:60px;" onpaste="window.app.handleFeedbackPaste(event, this)"></textarea>' +
+'<button class="btn-primary" id="jixy-fb-submit" style="margin-top:6px; font-size:12px; padding:8px; background:var(--warning); color:#000;" onclick="window.app.submitJixyFeedback()">Send to Dev Team</button>' +
+'</div>'
+};
+}
+
+return null;
+}
+};
+</script>
