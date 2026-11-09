@@ -1,4 +1,3 @@
-
 <!-- File: Index.html -->
 <!DOCTYPE html>
 <html lang="en">
@@ -338,7 +337,7 @@ textarea.modern-input { line-height: 1.5; }
 <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-zap" style="color:var(--warning); filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.4));">
 <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
 </svg>
-Flash Assistant 
+Flash Assistant
 </h1>
 <div style="display:flex; align-items:center; gap: 16px;">
 <!-- Unified Queue Badge -->
@@ -887,12 +886,16 @@ Jixy Knowledge Bot
     { category: 'Content', media: [{ type: 'Image', policies: ['Medical Info'] }] }
   ];
   const tickets = [
-    { time: '10:42', verdict: 'Pending QA', workflow: 'Demo-Workflow', jobId: 'DEMO-1042', thread: 'A sample policy question is waiting for review.', policy: '—', note: '—', status: 'pending' },
-    { time: '09:18', verdict: 'Resolved · Safe', workflow: 'Demo-Workflow', jobId: 'DEMO-0918', thread: 'A sample response was reviewed and resolved.', policy: 'No Violation', note: 'Fictional example for this browser demo.', status: 'safe' },
-    { time: 'Yesterday', verdict: 'Parked', workflow: 'Demo-Workflow', jobId: 'DEMO-0826', thread: 'A sample edge case needs additional review.', policy: '—', note: 'Fictional example for this browser demo.', status: 'parked' }
+    { time: '10:42', verdict: 'Pending QA', workflow: 'Demo-Workflow', jobId: 'DEMO-1042', thread: 'A sample policy question is waiting for review.', policy: '—', note: '—', status: 'pending', analyses: [{ role: 'Reporter (Agent 1)', policy: 'Safety · Violence', comment: 'The sample response may depict a risky action and needs a second review.' }] },
+    { time: '09:18', verdict: 'Resolved · Safe', workflow: 'Demo-Workflow', jobId: 'DEMO-0918', thread: 'A sample response was reviewed and resolved.', policy: 'No Violation', note: 'Fictional example for this browser demo.', status: 'safe', analyses: [{ role: 'Reporter (Agent 1)', policy: 'No Violation', comment: 'The fictional response is informational and does not provide harmful instructions.' }] },
+    { time: 'Yesterday', verdict: 'Parked', workflow: 'Demo-Workflow', jobId: 'DEMO-0826', thread: 'A sample edge case needs additional review.', policy: '—', note: 'Fictional example for this browser demo.', status: 'parked', analyses: [{ role: 'Reporter (Agent 1)', policy: 'Content · Medical Info', comment: 'This example needs a policy specialist to review the context.' }] }
   ];
   const byId = id => document.getElementById(id);
   let currentStep = 1;
+  let currentRole = 'agent';
+  let activeTicket = null;
+  let evaluationMode = 'agent';
+  const grayAreaCases = [];
 
   function notify(message, type = 'info') {
     let host = byId('toast-container');
@@ -979,11 +982,10 @@ Jixy Knowledge Bot
     const body = byId('log-table-body');
     if (!body) return;
     const query = search.trim().toLowerCase();
-    const visible = tickets.filter(ticket => `${ticket.jobId} ${ticket.thread} ${ticket.verdict}`.toLowerCase().includes(query));
+    const visible = tickets.filter(ticket => `${ticket.jobId} ${ticket.thread} ${ticket.verdict} ${ticket.workflow}`.toLowerCase().includes(query));
     body.replaceChildren();
     visible.forEach(ticket => {
       const row = document.createElement('tr');
-      const values = [ticket.time, ticket.workflow, ticket.jobId, ticket.thread, ticket.policy, ticket.note];
       const time = document.createElement('td');
       time.textContent = ticket.time;
       row.appendChild(time);
@@ -995,7 +997,7 @@ Jixy Knowledge Bot
       badge.append(dot, document.createTextNode(ticket.verdict));
       verdict.appendChild(badge);
       row.appendChild(verdict);
-      values.slice(1).forEach((value, index) => {
+      [ticket.workflow, ticket.jobId, ticket.thread, ticket.policy, ticket.note].forEach((value, index) => {
         const cell = document.createElement('td');
         cell.textContent = value;
         if (index === 1) {
@@ -1005,16 +1007,27 @@ Jixy Knowledge Bot
         row.appendChild(cell);
       });
       const actionCell = document.createElement('td');
-      const viewButton = document.createElement('button');
-      viewButton.type = 'button';
-      viewButton.className = 'btn-secondary';
-      viewButton.textContent = 'View';
-      viewButton.addEventListener('click', () => {
-        byId('modal-title').textContent = `Sample thread · ${ticket.jobId}`;
-        byId('modal-body-view').textContent = `${ticket.thread} This record is fictional and stored only in this page session.`;
-        showModal('content-modal');
-      });
-      actionCell.appendChild(viewButton);
+      actionCell.style.whiteSpace = 'nowrap';
+      const addAction = (label, className, action) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = className;
+        button.style.cssText = 'padding:6px 10px; font-size:11px; margin:2px;';
+        button.textContent = label;
+        button.addEventListener('click', action);
+        actionCell.appendChild(button);
+      };
+      addAction('View Thread', 'btn-secondary', () => showThread(ticket));
+      if (currentRole === 'qa') {
+        if (ticket.status === 'pending' || ticket.status === 'parked') {
+          addAction(ticket.status === 'parked' ? 'Resume Review' : 'Review', 'btn-resolve', () => openEvaluation(ticket, 'qa'));
+          addAction('Ask & Park', 'btn-park', () => openEvaluation(ticket, 'park'));
+        } else {
+          addAction('Edit Decision', 'btn-resolve', () => openEvaluation(ticket, 'edit'));
+        }
+      } else if (ticket.status === 'pending') {
+        addAction('Add Analysis', 'btn-primary', () => openEvaluation(ticket, 'agent'));
+      }
       row.appendChild(actionCell);
       body.appendChild(row);
     });
@@ -1022,6 +1035,167 @@ Jixy Knowledge Bot
     if (empty) empty.style.display = visible.length ? 'none' : 'block';
     const pageInfo = byId('pagination-info');
     if (pageInfo) pageInfo.textContent = `Showing ${visible.length} sample record${visible.length === 1 ? '' : 's'}`;
+  }
+
+  function showThread(ticket) {
+    byId('modal-title').textContent = `Thread History · ${ticket.jobId}`;
+    const body = byId('modal-body-view');
+    body.replaceChildren();
+    const addLine = (label, text, color) => {
+      const block = document.createElement('div');
+      block.style.cssText = 'padding:14px; margin-bottom:10px; border-left:3px solid ' + color + '; background:var(--bg-hover); border-radius:8px;';
+      const heading = document.createElement('strong');
+      heading.style.cssText = 'display:block; color:' + color + '; margin-bottom:6px;';
+      heading.textContent = label;
+      const content = document.createElement('div');
+      content.style.cssText = 'white-space:pre-wrap; line-height:1.55;';
+      content.textContent = text;
+      block.append(heading, content);
+      body.appendChild(block);
+    };
+    addLine('AGENT THREAD · FICTIONAL SAMPLE', ticket.thread, 'var(--primary)');
+    if (ticket.response) addLine('MODEL RESPONSE · FICTIONAL SAMPLE', ticket.response, 'var(--text-muted)');
+    (ticket.analyses || []).forEach((analysis, index) => {
+      addLine(`${analysis.role || `Analyst (Agent ${index + 1})`} · ${analysis.policy}`, analysis.comment, 'var(--text-muted)');
+    });
+    if (ticket.status !== 'pending') {
+      addLine(`QA OFFICIAL VERDICT · ${ticket.policy}`, ticket.note, ticket.status === 'safe' ? 'var(--success)' : 'var(--warning)');
+    } else {
+      addLine('QA REVIEW IN PROGRESS', 'This sample is waiting for a QA decision.', 'var(--warning)');
+    }
+    const disclaimer = document.createElement('small');
+    disclaimer.style.cssText = 'display:block; color:var(--text-muted); margin-top:12px;';
+    disclaimer.textContent = 'Fictional data stored only in this page session.';
+    body.appendChild(disclaimer);
+    showModal('content-modal');
+  }
+
+  function setSelectedPolicy(containerId, policy) {
+    const options = byId(containerId).querySelectorAll('.ms-option');
+    options.forEach(option => option.classList.toggle('selected', option.dataset.value.split('] ').pop() === policy));
+    renderSelection(containerId);
+  }
+
+  function openEvaluation(ticket, mode) {
+    activeTicket = ticket;
+    evaluationMode = mode;
+    byId('eval-job-id').textContent = ticket.jobId;
+    byId('eval-comment-input').value = mode === 'edit' || mode === 'park' ? ticket.note === '—' ? '' : ticket.note : '';
+    byId('eval-gray-area-toggle').checked = false;
+    byId('qa-gray-area-container').style.display = currentRole === 'qa' ? 'block' : 'none';
+    byId('eval-park-btn').style.display = mode === 'qa' ? 'inline-flex' : 'none';
+    byId('eval-modal-title').textContent = mode === 'agent' ? 'Add Blind Analysis' : mode === 'edit' ? 'Modify QA Decision' : mode === 'park' ? 'Ask & Park for Further Review' : 'QA Official Review';
+    byId('eval-modal-desc').textContent = mode === 'agent'
+      ? 'Your analysis is added to the blind thread. This demo uses fictional content only.'
+      : 'Choose the official policy and record a QA rationale. This action is simulated in this browser.';
+    byId('eval-submit-btn').textContent = mode === 'agent' ? 'Submit Analysis' : mode === 'edit' ? 'Save Changes' : mode === 'park' ? 'Park Case' : 'Resolve Case';
+    const policy = mode === 'edit' || mode === 'park' ? ticket.policy : '';
+    setSelectedPolicy('eval-policy-checkboxes', policy);
+    byId('eval-comment-warning').style.display = 'none';
+    showModal('evaluation-modal');
+  }
+
+  function completeEvaluation(park = false) {
+    if (!activeTicket) return;
+    const policies = selectedPolicies('eval-policy-checkboxes');
+    const comment = byId('eval-comment-input').value.trim();
+    if (!policies.length || comment.length < 15) {
+      byId('eval-comment-warning').style.display = 'block';
+      notify('Select a policy and enter a rationale of at least 15 characters.', 'warning');
+      return;
+    }
+    const policy = policies[0].split('] ').pop();
+    if (evaluationMode === 'agent') {
+      activeTicket.analyses = activeTicket.analyses || [];
+      activeTicket.analyses.push({ role: `Analyst (Agent ${activeTicket.analyses.length + 1})`, policy, comment });
+      notify('Blind analysis added to the sample thread.', 'success');
+    } else {
+      activeTicket.policy = policy;
+      activeTicket.note = comment;
+      if (park || evaluationMode === 'park') {
+        activeTicket.status = 'parked';
+        activeTicket.verdict = 'Parked';
+        notify('Sample case parked for further review.', 'success');
+      } else {
+        activeTicket.status = policy === 'No Violation' ? 'safe' : 'violation';
+        activeTicket.verdict = policy === 'No Violation' ? 'Resolved · Safe' : 'Resolved · Violation';
+        notify(evaluationMode === 'edit' ? 'Sample QA decision updated.' : 'Sample case resolved.', 'success');
+      }
+      if (byId('eval-gray-area-toggle').checked) {
+        activeTicket.grayArea = true;
+        if (!grayAreaCases.some(item => item.jobId === activeTicket.jobId)) {
+          grayAreaCases.push({ jobId: activeTicket.jobId, policy, note: comment, date: new Date().toLocaleDateString() });
+        }
+      }
+    }
+    hideModal('evaluation-modal');
+    renderQueue(byId('table-search-input').value);
+    renderWorkbench();
+  }
+
+  function renderWorkbench() {
+    const panel = byId('qa-workbench');
+    if (!panel) return;
+    const pending = tickets.filter(ticket => ticket.status === 'pending').length;
+    const parked = tickets.filter(ticket => ticket.status === 'parked').length;
+    const resolved = tickets.filter(ticket => ticket.status === 'safe' || ticket.status === 'violation').length;
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;"><div><h2 style="margin:0 0 5px;color:var(--text-main);">QA Workbench</h2><span style="font-size:12px;color:var(--text-muted);">Review Agent analyses, resolve cases, or park edge cases · browser-only demo</span></div><div style="display:flex;gap:10px;flex-wrap:wrap;"><span class="glass-badge">Pending QA <b>${pending}</b></span><span class="glass-badge">Parked <b>${parked}</b></span><span class="glass-badge">Resolved <b>${resolved}</b></span></div></div>`;
+  }
+
+  function setRole(role) {
+    currentRole = role;
+    const formPanel = byId('entry-form').parentElement;
+    formPanel.style.display = role === 'agent' ? '' : 'none';
+    byId('user-role-badge').textContent = `${role.toUpperCase()} VIEW · FICTIONAL SAMPLE DATA`;
+    byId('user-role-badge').style.color = role === 'qa' ? 'var(--primary)' : 'var(--text-muted)';
+    ['qa-dashboard-btn', 'gray-area-db-btn', 'qa-settings-btn'].forEach(id => {
+      byId(id).style.display = role === 'qa' ? 'flex' : 'none';
+    });
+    byId('qa-workbench').style.display = role === 'qa' ? 'block' : 'none';
+    document.querySelectorAll('[data-demo-role]').forEach(button => {
+      button.className = button.dataset.demoRole === role ? 'btn-primary' : 'btn-secondary';
+      button.setAttribute('aria-pressed', String(button.dataset.demoRole === role));
+    });
+    renderWorkbench();
+    renderQueue(byId('table-search-input').value);
+  }
+
+  function renderGrayAreas() {
+    const body = byId('gray-area-table-body');
+    body.replaceChildren();
+    grayAreaCases.forEach(item => {
+      const row = document.createElement('tr');
+      [item.date, item.jobId, item.policy, item.note].forEach(text => {
+        const cell = document.createElement('td');
+        cell.textContent = text;
+        row.appendChild(cell);
+      });
+      body.appendChild(row);
+    });
+    byId('gray-area-empty-state').style.display = grayAreaCases.length ? 'none' : 'block';
+  }
+
+  function addDemoControls() {
+    const header = document.querySelector('.app-header > div');
+    const roleSwitch = document.createElement('div');
+    roleSwitch.style.cssText = 'display:flex;gap:6px;align-items:center;';
+    ['agent', 'qa'].forEach(role => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.demoRole = role;
+      button.textContent = role === 'agent' ? 'Agent View' : 'QA View';
+      button.style.cssText = 'padding:7px 10px;font-size:12px;';
+      button.addEventListener('click', () => setRole(role));
+      roleSwitch.appendChild(button);
+    });
+    header.insertBefore(roleSwitch, byId('theme-toggle-btn'));
+    const workbench = document.createElement('section');
+    workbench.id = 'qa-workbench';
+    workbench.className = 'glass-panel animate-entry';
+    workbench.style.cssText = 'display:none;margin-bottom:20px;';
+    workbench.setAttribute('aria-label', 'QA demo workbench');
+    const formPanel = byId('entry-form').parentElement;
+    formPanel.parentElement.insertBefore(workbench, formPanel.nextSibling);
   }
 
   function showModal(id) {
@@ -1105,8 +1279,9 @@ Jixy Knowledge Bot
   document.addEventListener('DOMContentLoaded', () => {
     buildPolicySelect('agent-policy-checkboxes');
     buildPolicySelect('eval-policy-checkboxes');
-    byId('user-role-badge').textContent = 'PUBLIC DEMO / SAMPLE DATA';
+    addDemoControls();
     renderQueue();
+    setRole('agent');
     window.app.validateStep1();
     window.app.validateStep2();
     window.app.validateStep3();
@@ -1118,7 +1293,23 @@ Jixy Knowledge Bot
       event.preventDefault();
       window.app.validateStep3();
       if (byId('btn-submit-final').disabled) return;
-      tickets.unshift({ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), verdict: 'Pending QA', workflow: 'Demo-Workflow', jobId: `DEMO-${Date.now().toString().slice(-5)}`, thread: byId('query-input').value.trim() || 'New fictional demo escalation.', policy: selectedPolicies('agent-policy-checkboxes').map(item => item.split('] ').pop()).join(', '), note: byId('agent-comment-input').value.trim(), status: 'pending' });
+      const jobId = byId('job-id-input').value.trim();
+      if (tickets.some(ticket => ticket.jobId.toLowerCase() === jobId.toLowerCase())) {
+        notify('That sample Job ID is already in the queue. Use a unique ID.', 'warning');
+        return;
+      }
+      tickets.unshift({
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        verdict: 'Pending QA',
+        workflow: 'Demo-Workflow',
+        jobId,
+        thread: byId('query-input').value.trim() || 'New fictional demo escalation.',
+        response: byId('response-input').value.trim(),
+        policy: '—',
+        note: '—',
+        status: 'pending',
+        analyses: [{ role: 'Reporter (Agent 1)', policy: selectedPolicies('agent-policy-checkboxes').map(item => item.split('] ').pop()).join(', '), comment: byId('agent-comment-input').value.trim() }]
+      });
       renderQueue(byId('table-search-input').value);
       event.target.reset();
       document.querySelectorAll('#agent-policy-checkboxes .ms-option.selected').forEach(option => option.classList.remove('selected'));
@@ -1134,6 +1325,16 @@ Jixy Knowledge Bot
       byId('theme-icon-moon').style.display = light ? 'none' : 'block';
     });
     byId('help-guide-btn').addEventListener('click', () => showModal('help-modal'));
+    byId('eval-submit-btn').addEventListener('click', () => completeEvaluation(false));
+    byId('eval-park-btn').addEventListener('click', () => completeEvaluation(true));
+    byId('qa-dashboard-btn').addEventListener('click', () => {
+      byId('qa-workbench').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    byId('gray-area-db-btn').addEventListener('click', () => {
+      renderGrayAreas();
+      showModal('gray-area-modal');
+    });
+    byId('qa-settings-btn').addEventListener('click', () => showModal('settings-modal'));
     document.querySelectorAll('.modal-backdrop').forEach(modal => modal.addEventListener('click', event => {
       if (event.target === modal) modal.style.display = 'none';
     }));
