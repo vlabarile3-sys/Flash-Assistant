@@ -407,7 +407,7 @@ Flash Assistant
 <div class="form-grid">
 <div class="form-group">
 <label for="workflow-select">Active Workflow</label>
-<input type="text" id="workflow-select" value="O18" class="modern-input" readonly required style="cursor: not-allowed; opacity: 0.8; color: var(--warning); font-weight: bold;">
+<input type="text" id="workflow-select" value="Demo-Workflow" class="modern-input" readonly required style="cursor: not-allowed; opacity: 0.8; color: var(--warning); font-weight: bold;">
 </div>
 <div class="form-group">
 <label>Job ID Number <span style="color:var(--error);">*</span></label>
@@ -887,9 +887,9 @@ Jixy Knowledge Bot
     { category: 'Content', media: [{ type: 'Image', policies: ['Medical Info'] }] }
   ];
   const tickets = [
-    { time: '10:42', verdict: 'Pending QA', workflow: 'O18', jobId: 'DEMO-1042', thread: 'A sample policy question is waiting for review.', policy: '—', note: '—', status: 'pending' },
-    { time: '09:18', verdict: 'Resolved · Safe', workflow: 'O18', jobId: 'DEMO-0918', thread: 'A sample response was reviewed and resolved.', policy: 'No Violation', note: 'Fictional example for this browser demo.', status: 'safe' },
-    { time: 'Yesterday', verdict: 'Parked', workflow: 'O18', jobId: 'DEMO-0826', thread: 'A sample edge case needs additional review.', policy: '—', note: 'Fictional example for this browser demo.', status: 'parked' }
+    { time: '10:42', verdict: 'Pending QA', workflow: 'Demo-Workflow', jobId: 'DEMO-1042', thread: 'A sample policy question is waiting for review.', policy: '—', note: '—', status: 'pending' },
+    { time: '09:18', verdict: 'Resolved · Safe', workflow: 'Demo-Workflow', jobId: 'DEMO-0918', thread: 'A sample response was reviewed and resolved.', policy: 'No Violation', note: 'Fictional example for this browser demo.', status: 'safe' },
+    { time: 'Yesterday', verdict: 'Parked', workflow: 'Demo-Workflow', jobId: 'DEMO-0826', thread: 'A sample edge case needs additional review.', policy: '—', note: 'Fictional example for this browser demo.', status: 'parked' }
   ];
   const byId = id => document.getElementById(id);
   let currentStep = 1;
@@ -1118,7 +1118,7 @@ Jixy Knowledge Bot
       event.preventDefault();
       window.app.validateStep3();
       if (byId('btn-submit-final').disabled) return;
-      tickets.unshift({ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), verdict: 'Pending QA', workflow: 'O18', jobId: `DEMO-${Date.now().toString().slice(-5)}`, thread: byId('query-input').value.trim() || 'New fictional demo escalation.', policy: selectedPolicies('agent-policy-checkboxes').map(item => item.split('] ').pop()).join(', '), note: byId('agent-comment-input').value.trim(), status: 'pending' });
+      tickets.unshift({ time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), verdict: 'Pending QA', workflow: 'Demo-Workflow', jobId: `DEMO-${Date.now().toString().slice(-5)}`, thread: byId('query-input').value.trim() || 'New fictional demo escalation.', policy: selectedPolicies('agent-policy-checkboxes').map(item => item.split('] ').pop()).join(', '), note: byId('agent-comment-input').value.trim(), status: 'pending' });
       renderQueue(byId('table-search-input').value);
       event.target.reset();
       document.querySelectorAll('#agent-policy-checkboxes .ms-option.selected').forEach(option => option.classList.remove('selected'));
