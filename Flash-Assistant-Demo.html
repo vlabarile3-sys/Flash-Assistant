@@ -272,7 +272,7 @@
           ticket.qa = { verdict: "Needs context", note: "Preview only: QA reviewed the fictional comments and recorded an example outcome. Nothing was saved or sent." };
           ticket.status = "resolved";
           ticket.age = "Resolved · local preview";
-    updateStats();
+          updateStats();
           renderList();
           renderDetails();
         });
@@ -317,7 +317,7 @@
         resolvedOnly = false;
         document.getElementById("filter").textContent = "All";
         document.getElementById("filter").setAttribute("aria-pressed", "false");
-   updateStats();
+        updateStats();
         renderList();
         renderDetails();
       });
