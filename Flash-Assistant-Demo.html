@@ -736,8 +736,8 @@ Gray Area Cases
 </div>
 <!-- QA Whitelist Panel -->
 <div id="folder-qa-list" class="settings-tab-content active">
-<p style="color:var(--text-muted); font-size:14px; margin-bottom:1rem;">Enter authorized QA email addresses or LDAP strings (one per line).</p>
-<textarea id="settings-emails" class="modern-input" rows="8"></textarea>
+<p style="color:var(--text-muted); font-size:14px; margin-bottom:1rem;">Demo only: do not enter real email addresses or account IDs. Any text stays in this browser tab.</p>
+<textarea id="settings-emails" class="modern-input" rows="8" placeholder="sample-qa@example.invalid"></textarea>
 </div>
 
 <!-- 3-Tier Policy Builder Panel -->
@@ -896,6 +896,7 @@ Jixy Knowledge Bot
   let activeTicket = null;
   let evaluationMode = 'agent';
   const grayAreaCases = [];
+  const demoSettings = { emails: '', countdownDuration: 3, countdownVisibility: false, jixy: [] };
 
   function notify(message, type = 'info') {
     let host = byId('toast-container');
@@ -1148,6 +1149,8 @@ Jixy Knowledge Bot
     formPanel.style.display = role === 'agent' ? '' : 'none';
     byId('user-role-badge').textContent = `${role.toUpperCase()} VIEW · FICTIONAL SAMPLE DATA`;
     byId('user-role-badge').style.color = role === 'qa' ? 'var(--primary)' : 'var(--text-muted)';
+    const qaHelpTab = byId('tab-help-qa');
+    if (qaHelpTab) qaHelpTab.style.display = role === 'qa' ? 'inline-block' : 'none';
     ['qa-dashboard-btn', 'gray-area-db-btn', 'qa-settings-btn'].forEach(id => {
       byId(id).style.display = role === 'qa' ? 'flex' : 'none';
     });
@@ -1163,7 +1166,15 @@ Jixy Knowledge Bot
   function renderGrayAreas() {
     const body = byId('gray-area-table-body');
     body.replaceChildren();
-    grayAreaCases.forEach(item => {
+    const select = byId('gray-area-policy-filter');
+    const selectedFilter = select.value;
+    const policies = Array.from(new Set(grayAreaCases.map(item => item.policy))).sort();
+    select.replaceChildren(new Option('Filter by Policy (All)', 'ALL'));
+    policies.forEach(policy => select.add(new Option(policy, policy)));
+    select.value = policies.includes(selectedFilter) ? selectedFilter : 'ALL';
+    const filter = select.value;
+    const visibleCases = grayAreaCases.filter(item => filter === 'ALL' || item.policy === filter);
+    visibleCases.forEach(item => {
       const row = document.createElement('tr');
       [item.date, item.jobId, item.policy, item.note].forEach(text => {
         const cell = document.createElement('td');
@@ -1172,7 +1183,88 @@ Jixy Knowledge Bot
       });
       body.appendChild(row);
     });
-    byId('gray-area-empty-state').style.display = grayAreaCases.length ? 'none' : 'block';
+    byId('gray-area-empty-state').style.display = visibleCases.length ? 'none' : 'block';
+  }
+
+  function renderSettingsPolicies() {
+    const container = byId('settings-policies-container');
+    container.replaceChildren();
+    policyGroups.forEach(group => group.media.forEach(media => {
+      addSettingsPolicyRow(group.category, media.type, media.policies.join(', '));
+    }));
+  }
+
+  function addSettingsPolicyRow(category = 'New Category', media = 'All', policies = 'New Policy') {
+    const row = document.createElement('div');
+    row.className = 'form-grid demo-policy-row';
+    row.style.cssText = 'grid-template-columns:1fr 1fr 2fr auto;gap:8px;';
+    [
+      ['Category', category],
+      ['Media type', media],
+      ['Policies (comma separated)', policies]
+    ].forEach(([label, value]) => {
+      const input = document.createElement('input');
+      input.className = 'modern-input';
+      input.placeholder = label;
+      input.setAttribute('aria-label', label);
+      input.value = value;
+      row.appendChild(input);
+    });
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'btn-secondary';
+    remove.textContent = 'Remove';
+    remove.style.cssText = 'padding:6px 10px;font-size:12px;';
+    remove.addEventListener('click', () => row.remove());
+    row.appendChild(remove);
+    byId('settings-policies-container').appendChild(row);
+  }
+
+  function addSettingsResourceRow(title = '', url = '', keywords = '') {
+    const row = document.createElement('div');
+    row.className = 'form-grid demo-resource-row';
+    row.style.cssText = 'grid-template-columns:1fr 1fr 1fr;gap:8px;';
+    [
+      ['Resource title', title],
+      ['URL (demo only)', url],
+      ['Keywords', keywords]
+    ].forEach(([label, value]) => {
+      const input = document.createElement('input');
+      input.className = 'modern-input';
+      input.placeholder = label;
+      input.setAttribute('aria-label', label);
+      input.value = value;
+      row.appendChild(input);
+    });
+    byId('settings-jixy-kb-container').appendChild(row);
+  }
+
+  function saveDemoSettings() {
+    demoSettings.emails = byId('settings-emails').value.trim();
+    demoSettings.countdownDuration = Math.min(120, Math.max(1, Number(byId('settings-cd-duration').value) || 3));
+    demoSettings.countdownVisibility = byId('settings-cd-visibility').checked;
+    const policyRows = Array.from(document.querySelectorAll('.demo-policy-row'));
+    const updatedGroups = policyRows.map(row => {
+      const inputs = row.querySelectorAll('input');
+      const category = inputs[0].value.trim();
+      const type = inputs[1].value.trim();
+      const policies = inputs[2].value.split(',').map(policy => policy.trim()).filter(Boolean);
+      return category && type && policies.length ? { category, media: [{ type, policies }] } : null;
+    }).filter(Boolean);
+    if (!updatedGroups.length || updatedGroups.length !== policyRows.length) {
+      notify('Complete or remove every policy category before saving.', 'warning');
+      return;
+    }
+    if (updatedGroups.length) {
+      policyGroups.splice(0, policyGroups.length, ...updatedGroups);
+      buildPolicySelect('agent-policy-checkboxes');
+      buildPolicySelect('eval-policy-checkboxes');
+    }
+    demoSettings.jixy = Array.from(document.querySelectorAll('.demo-resource-row')).map(row =>
+      Array.from(row.querySelectorAll('input')).map(input => input.value.trim())
+    ).filter(values => values.some(Boolean));
+    notify('Configuration saved in this tab only; no server or account data is connected.', 'success');
+    hideModal('settings-modal');
   }
 
   function addDemoControls() {
@@ -1334,7 +1426,19 @@ Jixy Knowledge Bot
       renderGrayAreas();
       showModal('gray-area-modal');
     });
-    byId('qa-settings-btn').addEventListener('click', () => showModal('settings-modal'));
+    byId('settings-policy-add-row').addEventListener('click', () => addSettingsPolicyRow());
+    byId('settings-jixy-add-row').addEventListener('click', () => addSettingsResourceRow());
+    byId('settings-save-btn').addEventListener('click', saveDemoSettings);
+    byId('gray-area-policy-filter').addEventListener('change', renderGrayAreas);
+    byId('qa-settings-btn').addEventListener('click', () => {
+      byId('settings-emails').value = demoSettings.emails;
+      byId('settings-cd-duration').value = String(demoSettings.countdownDuration);
+      byId('settings-cd-visibility').checked = demoSettings.countdownVisibility;
+      renderSettingsPolicies();
+      byId('settings-jixy-kb-container').replaceChildren();
+      demoSettings.jixy.forEach(values => addSettingsResourceRow(...values));
+      showModal('settings-modal');
+    });
     document.querySelectorAll('.modal-backdrop').forEach(modal => modal.addEventListener('click', event => {
       if (event.target === modal) modal.style.display = 'none';
     }));
