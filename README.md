@@ -1,4 +1,17 @@
 ﻿# Flash Assistant
+## About the project
+
+Flash Assistant is a Google Workspace ticketing and escalation application that helps teams submit cases, collaborate on reviews, and record quality-assurance decisions in a shared workflow. Its multi-step form structures submissions, while the unified queue brings cases, discussion history, reviewer analyses, and verdicts together.
+
+### Key capabilities
+
+- Create and track tickets through a guided submission flow.
+- Review cases, add independent analyses, record QA decisions, and park cases for further investigation.
+- Explore Jixy, a knowledge assistant designed to help users find relevant guidance.
+- Use the Apps Script implementation with Google Sheets for ticket records and Google Drive for attachments.
+
+The public preview is a browser-only demonstration with fictional data; it does not connect to Google services or an AI provider. The full Apps Script application requires its own setup and permissions.
+
 
 > **Enterprise Ticketing & Automated Workflow System for Google Workspace**  
 > Developed with Google Apps Script, Modern Vanilla HTML5/CSS3/JavaScript, Glassmorphism UI, and Google Sheets as a Real-time Relational Engine.
