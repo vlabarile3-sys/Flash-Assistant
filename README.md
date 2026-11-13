@@ -1,4 +1,5 @@
-﻿# Flash Assistant
+# Flash Assistant
+
 ## About the project
 
 Flash Assistant is a Google Workspace ticketing and escalation application that helps teams submit cases, collaborate on reviews, and record quality-assurance decisions in a shared workflow. Its multi-step form structures submissions, while the unified queue brings cases, discussion history, reviewer analyses, and verdicts together.
@@ -12,7 +13,6 @@ Flash Assistant is a Google Workspace ticketing and escalation application that 
 
 The public preview is a browser-only demonstration with fictional data; it does not connect to Google services or an AI provider. The full Apps Script application requires its own setup and permissions.
 
-
 > **Enterprise Ticketing & Automated Workflow System for Google Workspace**  
 > Developed with Google Apps Script, Modern Vanilla HTML5/CSS3/JavaScript, Glassmorphism UI, and Google Sheets as a Real-time Relational Engine.
 
@@ -24,92 +24,92 @@ This preview uses fictional data and runs entirely in your browser. It does not 
 
 ---
 
-## Panoramica
+## Overview
 
-**Flash Assistant** è una Single Page Application (SPA) modulare ad alte prestazioni progettata per la gestione centralizzata di ticket, escalation e supporto operativo all'interno dell'ecosistema Google Workspace.
+**Flash Assistant** is a modular, high-performance single-page application (SPA) designed for centralized ticket management, escalations, and operational support within the Google Workspace ecosystem.
 
-Combina un'interfaccia moderna in stile glassmorphism con:
-- Motore di validazione e wizard multi-step.
-- Sincronizzazione in tempo reale dello stato ticket su Google Sheets.
-- Queue offline automatica con fallback in localStorage.
-- Motore NLP FAQ integrato con calcolo della pertinenza e search dinamico.
-- Sintetizzatore audio nativo (Web Audio API) per feedback sonoro non invasivo.
-- Generazione automatica di protocolli e gestione allegati su Google Drive.
+It combines a modern glassmorphism interface with:
+- A validation engine and multi-step wizard.
+- Real-time ticket status synchronization with Google Sheets.
+- An automatic offline queue with a localStorage fallback.
+- An integrated NLP FAQ engine with relevance scoring and dynamic search.
+- A native audio synthesizer (Web Audio API) for unobtrusive sound feedback.
+- Automatic protocol generation and attachment management using Google Drive.
 
 ---
 
-## Architettura dei File
+## File Architecture
 
-Il progetto è strutturato in 5 moduli disaccoppiati conformi agli standard di Google Apps Script:
+The project is structured into five decoupled modules compatible with Google Apps Script:
 
-| File | Tipologia | Descrizione |
+| File | Type | Description |
 |---|---|---|
-| Code.gs | Server-Side | Controller backend: routing Web App (doGet), configurazione dinamica, CRUD Google Sheets, upload Drive e trigger automatici. |
-| Index.html | Client-Side | Shell HTML principale, layout glassmorphism, modali interattivi e container del wizard. |
-| CSS.html | Styling | Design system completo: variabili CSS, palette HSL, glassmorphism, responsive grid e micro-animazioni. |
-| JavaScript.html | Logic | Client controller: state management, sincronizzazione server (google.script.run), Web Audio API e gestione coda offline. |
-| JixyFAQ.html | Modulo NLP | Knowledge base interattiva con matching lessicale/semantico e suggerimenti dinamici. |
+| Code.gs | Server-Side | Backend controller: web app routing (doGet), dynamic configuration, Google Sheets CRUD, Drive uploads, and automatic triggers. |
+| Index.html | Client-Side | Main HTML shell, glassmorphism layout, interactive modals, and wizard container. |
+| CSS.html | Styling | Complete design system: CSS variables, HSL palette, glassmorphism, responsive grid, and micro-animations. |
+| JavaScript.html | Logic | Client controller: state management, server synchronization (google.script.run), Web Audio API, and offline queue management. |
+| JixyFAQ.html | NLP Module | Interactive knowledge base with lexical/semantic matching and dynamic suggestions. |
 
 ---
 
-## Requisiti
+## Requirements
 
-- Un account Google Workspace o Google personale con accesso a Google Drive e Google Sheets.
-- Permessi per distribuire Web App in Google Apps Script.
+- A Google Workspace or personal Google account with access to Google Drive and Google Sheets.
+- Permission to deploy web apps in Google Apps Script.
 
 ---
 
-## Installazione e Configurazione
+## Installation and Configuration
 
-### 1. Creazione del Progetto Google Apps Script
-1. Crea un nuovo foglio di calcolo su Google Sheets (es. Flash Assistant Database).
-2. Dal menu superiore, seleziona **Estensioni** > **Apps Script**.
-3. Rinomina il progetto in Flash Assistant.
+### 1. Create the Google Apps Script Project
+1. Create a new Google spreadsheet (e.g., Flash Assistant Database).
+2. From the top menu, select **Extensions** > **Apps Script**.
+3. Rename the project to Flash Assistant.
 
-### 2. Importazione dei File
-Crea all'interno dell'editor Apps Script i seguenti file e incolla il relativo contenuto:
+### 2. Import the Files
+Create the following files in the Apps Script editor and paste their respective contents:
 1. Code.gs (Script)
 2. Index.html (HTML)
 3. CSS.html (HTML)
 4. JavaScript.html (HTML)
 5. JixyFAQ.html (HTML)
 
-### 3. Configurazione Parametri (Opzionale / Personalizzata)
-In Code.gs, la costante SPREADSHEET_ID rileva automaticamente il foglio collegato (SpreadsheetApp.getActiveSpreadsheet().getId()).
+### 3. Configure Parameters (Optional / Custom)
+In Code.gs, the SPREADSHEET_ID constant automatically detects the linked spreadsheet (SpreadsheetApp.getActiveSpreadsheet().getId()).
 
-Se intendi salvare gli screenshot e i file di feedback in cartelle Drive specifiche:
-- Crea le cartelle su Google Drive e recuperane l'ID dall'URL.
-- Inserisci gli ID nelle Proprietà Script (**Impostazioni progetto** > **Proprietà script**) con le chiavi:
-  - IMAGE_FOLDER_ID: ID cartella Drive per gli allegati immagine dei ticket.
-  - FEEDBACK_FOLDER_ID: ID cartella Drive per i file di feedback.
-  - *Nota:* Se non specificate, il sistema salverà i file nella cartella principale di Google Drive senza bloccare il flusso.
+To save screenshots and feedback files in specific Drive folders:
+- Create the folders in Google Drive and obtain their IDs from their URLs.
+- Add the IDs to Script Properties (**Project Settings** > **Script Properties**) using these keys:
+  - IMAGE_FOLDER_ID: Drive folder ID for ticket image attachments.
+  - FEEDBACK_FOLDER_ID: Drive folder ID for feedback files.
+  - *Note:* If not specified, the system saves files in the root Google Drive folder without interrupting the workflow.
 
-### 4. Inizializzazione del Database
-1. Nella barra degli strumenti dell'editor Apps Script, seleziona la funzione **setupSheets** dal menu a tendina delle funzioni.
-2. Clicca su **Esegui**.
-3. Concedi le autorizzazioni di accesso a Google Sheets e Google Drive richieste.
-4. setupSheets creerà e formatterà automaticamente tutti i fogli necessari (Tickets, Config, Logs, Audit).
+### 4. Initialize the Database
+1. In the Apps Script editor toolbar, select the **setupSheets** function from the function dropdown.
+2. Click **Run**.
+3. Grant the requested Google Sheets and Google Drive permissions.
+4. setupSheets will automatically create and format the required sheets (Tickets, Config, Logs, Audit).
 
-### 5. Distribuzione Web App
-1. Clicca su **Distribuisci** > **Nuova distribuzione**.
-2. Tipo: **Applicazione web**.
-3. Configura:
-   - **Descrizione:** Flash Assistant v1.0
-   - **Esegui come:** *Utente che accede all'applicazione web* oppure *Io (tuo account)* a seconda delle tue policy.
-   - **Chi ha accesso:** *Solo gli utenti dell'organizzazione* oppure *Chiunque*.
-4. Clicca su **Distribuisci** e copia l'URL dell'applicazione web.
-
----
-
-## Sicurezza e Privacy
-
-Il codice è stato bonificato e predisposto per l'uso open-source:
-- Nessun ID hardcoded o token sensibile.
-- Architettura a privilegi minimi con gestione sicura degli allegati.
-- Fallback di sicurezza in assenza di configurazioni Drive esterne.
+### 5. Deploy the Web App
+1. Click **Deploy** > **New deployment**.
+2. Type: **Web app**.
+3. Configure:
+   - **Description:** Flash Assistant v1.0
+   - **Execute as:** *User accessing the web app* or *Me (your account)*, depending on your policies.
+   - **Who has access:** *Users in your organization only* or *Anyone*.
+4. Click **Deploy** and copy the web app URL.
 
 ---
 
-## Autore
+## Security and Privacy
 
-- **Vito Labarile** - *Progettazione, Architettura e Sviluppo*
+The code has been sanitized and prepared for open-source use:
+- No hardcoded IDs or sensitive tokens.
+- Least-privilege architecture with secure attachment handling.
+- Safety fallback when external Drive folders are not configured.
+
+---
+
+## Author
+
+- **Vito Labarile** - *Design, Architecture, and Development*
